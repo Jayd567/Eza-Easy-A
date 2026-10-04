@@ -1,0 +1,43 @@
+# Scenes, mimic, persist and GUI. `tick` advances one frame (the Bevy engine will do this every frame).
+param mimic_budget = 1000
+
+scene name="battlefield"
+    player position=0,0,0 speed=5
+    enemy position=15,0,15 speed=2
+    simplex freq=0.5 amp=0.4
+        plane width=10 height=10 seg=64
+
+print("plane vertices:", scene.children[2].children[0].vertexCount)
+print("world edge:", scene.bounds.max)
+
+# --- mimic: predict the enemy's future without touching the real one
+mimic shadow_enemy to enemy
+    each step in 60
+        change shadow_enemy.position.x by shadow_enemy.speed
+        if shadow_enemy.position.x > scene.bounds.max
+            change shadow_enemy.mimic_collided to true
+
+if shadow_enemy.ready
+    if shadow_enemy.mimic_collided
+        change enemy.strategy to "retreat"
+        print("Prediction finished! Changing course to avoid a crash.")
+print("real enemy still at", enemy.position, "- shadow simulated", shadow_enemy.mimic_steps, "steps")
+
+# --- persist: temporary boost that cleans itself up
+persist change player.is_invincible to true change player.speed by 15 change player.animation to "roll" for 3 steps
+print("boosted:", player.speed, player.is_invincible)
+tick 3
+print("after 3 frames:", player.speed, player.is_invincible)
+
+# --- GUI with docking anchors
+gui window "pause_menu" width=400 height=400 centered=true
+    box position=top_bar height=50 color=#1A1A1A
+        text "GAME PAUSED" position=center color=#FFFFFF
+    button "Resume" size=200,40 then
+        change scene.state to "gameplay"
+
+bar = pause_menu.children[0]
+print("window at", pause_menu.x, pause_menu.y, "top bar", bar.width, "x", bar.height)
+print("title centered at", bar.children[0].x, bar.children[0].y)
+pause_menu.children[1].click()
+print("scene state:", scene.state)

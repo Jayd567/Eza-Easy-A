@@ -1,0 +1,21 @@
+{
+  "comments": { "lineComment": "#" },
+  "brackets": [["[", "]"], ["(", ")"]],
+  "autoClosingPairs": [
+    { "open": "[", "close": "]" },
+    { "open": "(", "close": ")" },
+    { "open": "\"", "close": "\"", "notIn": ["string"] }
+  ],
+  "surroundingPairs": [["[", "]"], ["(", ")"], ["\"", "\""]],
+  "indentationRules": {
+    "increaseIndentPattern": "^\\s*(if|else|each|while|define|data|attempt|handle|on|persist|mimic|scene|gui|prefab|stage|style|test)\\b.*$|^.*\\bthen\\s*$|^.*=\\s*define\\b.*$",
+    "decreaseIndentPattern": "^\\s*(else|handle)\\b"
+  },
+  "onEnterRules": [
+    {
+      "beforeText": "^\\s*(return|break|continue)\\b.*$",
+      "action": { "indent": "outdent" }
+    }
+  ],
+  "wordPattern": "[A-Za-z_][A-Za-z0-9_]*|-?\\d+(\\.\\d+)?|#[0-9A-Fa-f]{3,8}"
+}

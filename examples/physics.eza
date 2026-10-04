@@ -1,0 +1,24 @@
+# Gravity and solid collisions. Opt in with physics=true; planes, cubes, cylinders and spheres are solid by default.
+scene name="physics_test"
+    plane width=40 height=40
+    cube position=0,1,0 width=2 height=2
+    player position=-6,5,0 physics=true
+
+print("start:", player.position, "grounded:", player.grounded)
+tick 120
+print("landed:", player.position, "grounded:", player.grounded)
+
+# jump: set an upward velocity while grounded
+change player.velocity.y to 10
+tick
+print("airborne:", player.grounded)
+tick 120
+print("landed again, y =", player.position.y, "grounded:", player.grounded)
+
+# slide into the cube: the wall stops it (there is no friction, so it only stops at obstacles)
+change player.velocity.x to 5
+tick 120
+print("stopped at the wall, x =", player.position.x, "velocity.x =", player.velocity.x)
+
+# mouse and screen values exist even in script mode
+print("mouse:", mouse.position, "left down?", mouse.held("left"), "screen:", screen.width, "x", screen.height)

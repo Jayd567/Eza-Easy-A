@@ -1,0 +1,46 @@
+# A small budget app: CSV data, a database, charts and inputs.  Run with:  eza examples/budget.eza
+# Add an expense at the bottom; it's saved in output/expenses.db, so it's still there next time.
+
+expenses = database("output/expenses.db")
+if expenses.count == 0
+    each row in load "assets/expenses.csv"       # a .csv file loads as a list of dictionaries
+        expenses.add(row)
+
+# {Food: 271.05, Fun: 112.95, ...}
+define by_category
+    totals = {}
+    groups = expenses.all.group_by("category")
+    each name in groups
+        change totals[name] to groups[name].map(e -> e.amount).sum
+    return totals
+
+# {Aug: 187.5, Sep: 237.44, Oct: 89.55}
+define by_month
+    totals = {}
+    each e in expenses.all
+        month = date(e.date).format("Mon")
+        change totals[month] to totals.get(month, 0) + e.amount
+    return totals
+
+categories = by_category()
+months = by_month()
+total = expenses.all.map(e -> e.amount).sum
+
+gui window "budget" centered=true padding=16 gap=10 background=#0E1014 rounded=12
+    text "Spent so far: {total.format(2)}" font_size=14 color=#8AB4FF
+    chart "By category" kind=pie data=categories width=440 height=180
+    chart "By month" kind=bar data=months width=440 height=180 color=#4C9AFF
+    textbox "What did you buy?" name="item" width=440
+    dropdown name="category" options="Food","Fun","Travel","Home"
+    slider name="amount" min=1 max=200 step=1 value=20 width=440 then change budget.children[6].label to "Add {amount}"
+    button "Add 20" width=440 then add_expense()
+
+define add_expense
+    if item == ""
+        return
+    expenses.add({date: today().format("YYYY-MM-DD"), item: item, category: category, amount: amount})
+    change categories to by_category()       # the charts redraw by themselves
+    change months to by_month()
+    change total by amount
+    change budget.children[0].label to "Spent so far: {total.format(2)}"
+    change item to ""

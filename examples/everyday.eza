@@ -1,0 +1,42 @@
+# Everyday programming: list tools, text, numbers, dates, CSV and the web.
+# Run with:  eza run examples/everyday.eza
+
+# --- list tools: give them a short function with ->
+scores = [12, 5, 30, 8, 30]
+print("over 10:", scores.filter(s -> s > 10))
+print("doubled:", scores.map(s -> s * 2))
+print("first over 20:", scores.find(s -> s > 20), " how many 30s:", scores.count(30))
+print("no repeats:", scores.unique, " any over 25?", scores.any(s -> s > 25))
+
+people = [{name: "Ada", city: "London"}, {name: "Lin", city: "Paris"}, {name: "Bo", city: "London"}]
+print("names:", people.map(p -> p.name).join(", "))
+print("in London:", people.filter({city: "London"}).length)    # a dictionary works as a pattern
+print("by city:", people.group_by("city").keys)
+
+# --- text
+print("words:", "the quick  brown fox".words, " padded:", "7".pad_left(3, "0"))
+print("valid email?", "ada@mail.com".matches("[a-z]+@[a-z]+\.[a-z]+"))
+print("phone numbers:", "call 555-1234 or 555-9876".find_all("[0-9]{{3}}-[0-9]{{4}}"))    # {{ }} = a real brace
+
+# --- numbers
+print("price:", 3.14159.format(2), " big:", 1234567.commas)
+
+# --- dates and times
+start = date("2026-10-04")
+print("start:", start, "is a", start.weekday)
+print("in 30 days:", start.add_days(30).format("Weekday DD Month YYYY"))
+print("days until 25 Dec:", start.days_until(date(2026, 12, 25)))
+print("right now it is", now().format("hh:mm"))
+
+# --- CSV files: rows become dictionaries
+rows = load "assets/expenses.csv"
+food = rows.filter({category: "Food"})
+print(food.length, "food receipts, total", food.map(r -> r.amount).sum.format(2))
+save food to "output/food.csv"
+
+# --- the web (needs an internet connection)
+attempt
+    weather = fetch("https://api.open-meteo.com/v1/forecast?latitude=51.5&longitude=-0.12&current=temperature_2m")
+    print("London right now:", weather.current.temperature_2m, weather.current_units.temperature_2m)
+handle problem
+    print("no internet? ", problem)

@@ -1,0 +1,30 @@
+# platformer.eza - a tiny 2D platformer
+# Run: eza platformer.eza
+
+stage gravity=-1400
+    sprite name="hero" position=-240,-40 width=28 height=40 color=#8AB4FF origin=bottom_center physics=true
+    sprite name="ground" position=0,-220 width=640 height=40 color=#4A7A4A solid=true
+    sprite name="platform" position=120,-60 width=140 height=20 color=#6B8E6B solid=true
+    sprite name="coin" position=160,-100 width=16 height=16 color=#FFD54F
+
+coins = 0
+
+on scene.ticks
+    change hero.velocity.x to 0
+    if keyboard.held("a") or keyboard.held("left")
+        change hero.velocity.x to -220
+    if keyboard.held("d") or keyboard.held("right")
+        change hero.velocity.x to 220
+
+on keyboard.pressed("space")
+    if hero.grounded
+        change hero.velocity.y to 620
+
+on hero.collides_with(coin)
+    change coins by 1
+    print("coins:", coins)
+    change coin.position to [random_int(-280, 280), 60]
+
+on keyboard.pressed("escape")
+    print("You got", coins, "coins. Bye!")
+    go to "menu"

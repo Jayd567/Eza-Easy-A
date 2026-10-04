@@ -1,0 +1,46 @@
+# GUI styles.  Run with:  eza examples/styles.eza
+# Every line in a style is optional, and styles are optional too: plain buttons still work.
+
+style neon
+    width = 160
+    height = 50
+    background = #050505
+    color = #00FFCC
+    font = sans-serif
+    font_size = 16
+    rounded = 8
+    border = 1, solid, #00FFCC
+    glow = 10, #00FFCC, 0.4
+    padding = 10, 20
+
+    on hover
+        background = #00FFCC
+        color = #050505
+        glow = 30, #00FFCC, 0.8
+
+    on press
+        scale = 0.9
+
+# CSS-style names work too (background-color, border-radius, font-size)
+style soft
+    background-color = #2B2D42
+    color = #EDF2F4
+    border-radius = 20
+    shadow = 0, 6, 14, #00000088
+    padding = 8, 24
+    on hover
+        background-color = #3D405B
+
+clicks = 0
+
+gui window "menu" width=420 height=320 centered=true background=#101418 rounded=12
+    box position=top_bar height=56 background=#0B0E11
+        text "NEON MENU" position=center color=#00FFCC font_size=18
+    box position=fill
+        button "Play" style=neon position=top_left then change clicks by 1
+        button "Settings" style=soft position=center
+        button "Plain button" position=bottom_right then print("plain buttons still work")
+
+on scene.ticks
+    if menu.children[1].children[0].hover
+        change menu.children[0].children[0].label to "PLAY ({clicks} clicks)"

@@ -1,0 +1,64 @@
+# A small 2D platformer.  Run with:  eza examples/platformer2d.eza
+# A/D or arrows move   SPACE jumps   click anywhere to see where you clicked in the world
+
+hero_sheet = load "assets/hero_sheet.png"      # loaded once, cached behind the scenes
+
+# Everything indented under a stage is 2D. Sprites that share a texture are batched automatically.
+stage name="forest" gravity=-1400
+    tilemap tiles="assets/tilesheet.png" layout="maps/level1.txt" tile_size=32 position=-320,100
+    sprite name="hero" texture=hero_sheet frame_size=32,32 position=-240,-40 origin=bottom_center physics=true
+    sprite name="slime" texture="assets/slime.png" position=150,-92 origin=bottom_center
+    sprite name="coin" position=0,52 width=14 height=14 color=#FFD54F
+
+change stage.camera.zoom to 1.5
+speed = 220
+coins = 0
+
+# walking animation: a function with `wait` runs in the background
+walking = false
+define walk_cycle
+    each f in [1, 2, 0]
+        change hero.frame to f
+        wait 6 steps
+    change walking to false
+
+on scene.ticks
+    # polled input: checked every frame
+    moving = 0
+    if keyboard.held("a") or keyboard.held("left")
+        change moving to -1
+    if keyboard.held("d") or keyboard.held("right")
+        change moving to 1
+    change hero.velocity.x to moving * speed
+    if moving != 0
+        change hero.flip_x to moving < 0
+        if not walking and hero.grounded
+            change walking to true
+            walk_cycle()
+
+    # the camera follows the hero
+    change stage.camera.position to hero.position + [0, 40]
+
+    # the slime looks to its left for the hero
+    hit = raycast(from=slime.position + [0, 16], direction=[-1, 0], distance=250)
+    if hit and hit.object == hero
+        change slime.color to #FF8A80
+    else
+        change slime.color to #FFFFFF
+
+# event-driven input: fires once per press
+on keyboard.pressed("space")
+    if hero.grounded
+        change hero.velocity.y to 620
+
+on hero.collides_with(slime)
+    print("Ouch!")
+
+on hero.collides_with(coin)
+    change coins by 1
+    destroy coin
+    print("Coins: {coins}")
+
+on mouse.pressed("left")
+    world_click = stage.camera.to_world(mouse.position)
+    print("Clicked on the map at: {world_click}")

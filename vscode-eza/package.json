@@ -1,0 +1,74 @@
+{
+  "name": "eza-lang",
+  "displayName": "Eza Language",
+  "description": "Syntax highlighting, autocomplete, hover docs, error checking and a Run button for the Eza language",
+  "version": "0.1.0",
+  "publisher": "eza",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Snippets"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "eza",
+        "aliases": [
+          "Eza",
+          "eza"
+        ],
+        "extensions": [
+          ".eza"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "eza",
+        "scopeName": "source.eza",
+        "path": "./syntaxes/eza.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "eza",
+        "path": "./snippets/eza.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "eza.run",
+        "title": "Eza: Run Current File",
+        "icon": "$(play)"
+      },
+      {
+        "command": "eza.test",
+        "title": "Eza: Run Tests",
+        "icon": "$(beaker)"
+      }
+    ],
+    "menus": {
+      "editor/title/run": [
+        {
+          "command": "eza.run",
+          "when": "resourceLangId == eza"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Eza",
+      "properties": {
+        "eza.executablePath": {
+          "type": "string",
+          "default": "eza",
+          "description": "Path to the eza executable (leave as 'eza' if it is on your PATH)."
+        }
+      }
+    }
+  }
+}

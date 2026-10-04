@@ -1,0 +1,77 @@
+# Vector math, prefabs with spawn/destroy, and wait
+a = [1, 2, 3]
+b = [4, 5, 6]
+print("vectors:", a + b, b - a, a * 2, 2 * a, b / 2, -a)
+print("magnitude:", [3, 4].magnitude, " normalized:", [0, 0, 5].normalize)
+print("dot:", a.dot(b), " cross:", [1, 0, 0].cross([0, 1, 0]))
+print("distance:", distance([0, 0, 0], [3, 4, 0]), " lerp:", lerp([0, 0, 0], [10, 20, 0], 0.5), lerp(0, 10, 0.25))
+pos = [1, 1, 1]
+change pos by [0, 2, 0]
+print("change by a vector:", pos)
+print("other lists still join:", [1, "a"] + [2])
+
+scene name="arena"
+    plane width=40 height=40
+    player position=0,1,0
+
+# prefab = a template; spawn makes a live copy while the game runs
+prefab Bullet
+    sphere width=0.4 color=#FFEB3B damage=5
+
+b1 = spawn Bullet at 1,2,3
+print(b1, b1.position, b1.damage, "alive:", b1.alive)
+b2 = spawn Bullet at player.position + [0, 1, 0] damage=9 dir=[0, 0, -1]
+print(b2.position, b2.damage, b2.dir)
+change b1.position.x by 10
+print("b1:", b1.position, " b2 unchanged:", b2.position)
+copy = b1
+change copy.damage to 99
+print("same object through a copy:", b1.damage)
+destroy b1
+print("after destroy - b1 alive:", b1.alive, " b2 alive:", b2.alive)
+
+# wait: a function with wait runs in the background, the caller carries on
+define countdown label, n
+    each i in n
+        print("{label}: {n - i}")
+        wait 1 steps
+    print("{label}: liftoff")
+
+countdown("A", 3)
+print("(this prints right away)")
+tick
+print("-- tick 1")
+tick 3
+
+# a bullet that flies for 3 frames and then removes itself
+define fly b
+    each step in 3
+        change b.position by [0, 0, -1]
+        wait 1 steps
+    destroy b
+
+shot = spawn Bullet at 0,1,0
+fly(shot)
+tick 4
+print("shot ended at", shot.position, " alive:", shot.alive)
+
+# `on` handlers can wait too
+timer = 0
+on scene.ticks
+    change timer by 1
+on timer == 2
+    print("handler started at frame", timer)
+    wait 3 steps
+    print("handler resumed at frame", timer)
+tick 5
+
+# spawned objects can use physics
+prefab Crate
+    cube width=1 physics=true
+c = spawn Crate at 0,6,0
+tick 120
+print("crate landed at y =", c.position.y, " grounded:", c.grounded)
+
+# destroying something declared in the scene hides it
+destroy player
+print("player visible:", player.visible, " destroyed:", player.destroyed)

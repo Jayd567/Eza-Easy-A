@@ -1,0 +1,61 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Eza",
+  "scopeName": "source.eza",
+  "patterns": [
+    { "include": "#color" },
+    { "include": "#comment" },
+    { "include": "#string" },
+    { "include": "#number" },
+    { "include": "#definition" },
+    { "include": "#keyword" },
+    { "include": "#constant" },
+    { "include": "#property-assign" },
+    { "include": "#method" },
+    { "include": "#call" }
+  ],
+  "repository": {
+    "color": {
+      "match": "#(?:[0-9A-Fa-f]{8}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{3,4})\\b",
+      "name": "constant.other.color.eza"
+    },
+    "comment": { "match": "#.*$", "name": "comment.line.number-sign.eza" },
+    "string": {
+      "patterns": [
+        { "begin": "\"", "end": "\"", "name": "string.quoted.double.eza", "patterns": [{ "match": "\\\\.", "name": "constant.character.escape.eza" }, { "match": "\\{\\{|\\}\\}", "name": "constant.character.escape.eza" }, { "begin": "\\{", "end": "\\}", "name": "meta.interpolation.eza", "patterns": [{ "include": "$self" }] }] },
+        { "begin": "'", "end": "'", "name": "string.quoted.single.eza" },
+        { "begin": "â€œ", "end": "[â€â€œ\"]", "name": "string.quoted.double.eza" }
+      ]
+    },
+    "number": { "match": "\\b(0[bB][01_]+|0[xX][0-9A-Fa-f_]+|0[oO][0-7_]+|\\d+(\\.\\d+)?)\\b", "name": "constant.numeric.eza" },
+    "definition": {
+      "patterns": [
+        {
+          "match": "\\b(define)\\s+([A-Za-z_]\\w*)",
+          "captures": { "1": { "name": "storage.type.function.eza" }, "2": { "name": "entity.name.function.eza" } }
+        },
+        {
+          "match": "\\b(data)\\s+([A-Za-z_]\\w*)",
+          "captures": { "1": { "name": "storage.type.class.eza" }, "2": { "name": "entity.name.type.eza" } }
+        },
+        {
+          "match": "\\b(gui)\\s+([A-Za-z_]\\w*)",
+          "captures": { "1": { "name": "storage.type.eza" }, "2": { "name": "entity.name.tag.eza" } }
+        }
+      ]
+    },
+    "keyword": {
+      "patterns": [
+        { "match": "\\b(if|then|else|each|in|while|return|break|continue|attempt|handle|on|persist|for|until|mimic|tick|tween|over|ease|include|spawn|destroy|wait|at|seconds?|push|pop|load|save|append|test|expect|play|stop|emit|go)\\b", "name": "keyword.control.eza" },
+        { "match": "\\b(rewind|change|to|by|beginning|steps?)\\b", "name": "keyword.other.eza" },
+        { "match": "\\b(define|data|param|scene|gui|prefab|stage|style|particles)\\b", "name": "storage.type.eza" },
+        { "match": "\\b(and|or|not)\\b", "name": "keyword.operator.logical.eza" },
+        { "match": "->|==|!=|<=|>=|<<|>>|[+\\-*/%<>=&|^~]", "name": "keyword.operator.eza" }
+      ]
+    },
+    "constant": { "match": "\\b(true|false|none|pi)\\b", "name": "constant.language.eza" },
+    "property-assign": { "match": "\\b[A-Za-z_]\\w*(?==[^=])", "name": "variable.parameter.eza" },
+    "method": { "match": "(?<=\\.)[A-Za-z_]\\w*", "name": "support.function.method.eza" },
+    "call": { "match": "\\b[A-Za-z_]\\w*(?=\\()", "name": "entity.name.function.call.eza" }
+  }
+}

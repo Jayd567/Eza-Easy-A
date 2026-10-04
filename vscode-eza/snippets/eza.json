@@ -1,0 +1,288 @@
+{
+  "filter": {
+    "prefix": "filter",
+    "body": [
+      "${1:list}.filter(${2:x} -> ${3:x > 0})"
+    ],
+    "description": "keep the items a function says yes to"
+  },
+  "map": {
+    "prefix": "map",
+    "body": [
+      "${1:list}.map(${2:x} -> ${3:x * 2})"
+    ],
+    "description": "change every item"
+  },
+  "fetch": {
+    "prefix": "fetch",
+    "body": [
+      "attempt",
+      "\t${1:data} = fetch(\"${2:https://}\")",
+      "handle problem",
+      "\tprint(\"couldn't download:\", problem)"
+    ],
+    "description": "download from the web, safely"
+  },
+  "database": {
+    "prefix": "database",
+    "body": [
+      "${1:notes} = database(\"${2:notes.db}\")",
+      "$1.add({${3:title: \"First\"}})"
+    ],
+    "description": "records saved in a file"
+  },
+  "chart": {
+    "prefix": "chart",
+    "body": [
+      "chart \"${1:Title}\" kind=${2|bar,line,pie|} data=${3:values} width=${4:400} height=${5:220}"
+    ],
+    "description": "a chart in a gui"
+  },
+  "csv": {
+    "prefix": "csv",
+    "body": [
+      "${1:rows} = load \"${2:data.csv}\""
+    ],
+    "description": "load a CSV file as a list of dictionaries"
+  },
+  "particles": {
+    "prefix": "particles",
+    "body": [
+      "particles name=\"${1:sparks}\" rate=${2:0} life=${3:0.8} speed=${4:200} size=${5:6} end_size=1 color=${6:#FFD54F}"
+    ],
+    "description": "a particle effect (rate=0: bursts with emit)"
+  },
+  "emit": {
+    "prefix": "emit",
+    "body": [
+      "emit ${1:30} from ${2:sparks} at ${3:hero.position}"
+    ],
+    "description": "a burst of particles"
+  },
+  "play": {
+    "prefix": "play",
+    "body": [
+      "play \"${1:assets/sounds/coin.wav}\""
+    ],
+    "description": "play a sound"
+  },
+  "music": {
+    "prefix": "music",
+    "body": [
+      "play \"${1:assets/sounds/music.wav}\" loop=true volume=${2:0.5}"
+    ],
+    "description": "looping background music"
+  },
+  "go to": {
+    "prefix": "go",
+    "body": [
+      "go to \"${1:level2}\""
+    ],
+    "description": "switch to another script"
+  },
+  "textbox": {
+    "prefix": "textbox",
+    "body": [
+      "textbox \"${1:Type here...}\" name=\"${2:answer}\""
+    ],
+    "description": "a text input"
+  },
+  "slider": {
+    "prefix": "slider",
+    "body": [
+      "slider name=\"${1:volume}\" min=${2:0} max=${3:1}"
+    ],
+    "description": "a slider"
+  },
+  "checkbox": {
+    "prefix": "checkbox",
+    "body": [
+      "checkbox \"${1:Music}\" name=\"${2:music_on}\" checked=true"
+    ],
+    "description": "a checkbox"
+  },
+  "dropdown": {
+    "prefix": "dropdown",
+    "body": [
+      "dropdown name=\"${1:difficulty}\" options=${2:\"Easy\",\"Normal\",\"Hard\"}"
+    ],
+    "description": "a dropdown list"
+  },
+  "if": {
+    "prefix": "if",
+    "body": [
+      "if ${1:condition} then",
+      "\t$0"
+    ],
+    "description": "if statement"
+  },
+  "if else": {
+    "prefix": "ifelse",
+    "body": [
+      "if ${1:condition} then",
+      "\t${2}",
+      "else",
+      "\t$0"
+    ],
+    "description": "if / else"
+  },
+  "each": {
+    "prefix": "each",
+    "body": [
+      "each ${1:item} in ${2:list} then",
+      "\t$0"
+    ],
+    "description": "loop over a list or a number of steps"
+  },
+  "define": {
+    "prefix": "define",
+    "body": [
+      "define ${1:name}, ${2:param}",
+      "\t$0",
+      "\treturn ${3:value}"
+    ],
+    "description": "define a function"
+  },
+  "data": {
+    "prefix": "data",
+    "body": [
+      "data ${1:Name}",
+      "\t${2:field} = ${3:0}"
+    ],
+    "description": "group variables into a data type"
+  },
+  "attempt": {
+    "prefix": "attempt",
+    "body": [
+      "attempt",
+      "\t${1}",
+      "handle error",
+      "\t${2:print(error)}"
+    ],
+    "description": "try something without crashing"
+  },
+  "mimic": {
+    "prefix": "mimic",
+    "body": [
+      "mimic ${1:shadow} to ${2:entity}",
+      "\teach step in ${3:60}",
+      "\t\t$0"
+    ],
+    "description": "simulate a copy of an entity into the future"
+  },
+  "persist": {
+    "prefix": "persist",
+    "body": [
+      "persist",
+      "\tchange ${1:player.speed} by ${2:15}",
+      "for ${3:45} steps"
+    ],
+    "description": "temporary changes that undo themselves"
+  },
+  "tween": {
+    "prefix": "tween",
+    "body": [
+      "tween ${1:player.position} to ${2:[0, 0, 0]} over ${3:60} steps ease ${4|ease_in_out,linear,ease_in,ease_out|}"
+    ],
+    "description": "smoothly animate a value"
+  },
+  "prefab": {
+    "prefix": "prefab",
+    "body": [
+      "prefab ${1:Bullet}",
+      "\t${2:sphere} width=${3:0.5} color=${4:#FFEB3B}"
+    ],
+    "description": "template for objects created while the game runs"
+  },
+  "spawn": {
+    "prefix": "spawn",
+    "body": [
+      "${1:thing} = spawn ${2:Bullet} at ${3:0,0,0}"
+    ],
+    "description": "create a live copy of a prefab"
+  },
+  "wait": {
+    "prefix": "wait",
+    "body": [
+      "wait ${1:30} steps"
+    ],
+    "description": "pause a function or on-block between frames"
+  },
+  "stage": {
+    "prefix": "stage",
+    "body": [
+      "stage name=\"${1:level}\"",
+      "\tsprite name=\"${2:hero}\" texture=\"${3:assets/hero.png}\" position=${4:0,0} origin=bottom_center physics=true"
+    ],
+    "description": "a 2D world with sprites"
+  },
+  "sprite": {
+    "prefix": "sprite",
+    "body": [
+      "sprite name=\"${1:name}\" texture=\"${2:assets/picture.png}\" position=${3:0,0}"
+    ],
+    "description": "a 2D picture"
+  },
+  "tilemap": {
+    "prefix": "tilemap",
+    "body": [
+      "tilemap tiles=\"${1:assets/tiles.png}\" layout=\"${2:maps/level1.txt}\" tile_size=${3:32} position=${4:0,0}"
+    ],
+    "description": "a grid of tiles from a layout file"
+  },
+  "style": {
+    "prefix": "style",
+    "body": [
+      "style ${1:name}",
+      "\tbackground = ${2:#050505}",
+      "\tcolor = ${3:#00FFCC}",
+      "\trounded = ${4:8}",
+      "\ton hover",
+      "\t\tbackground = ${5:#00FFCC}"
+    ],
+    "description": "a reusable GUI look"
+  },
+  "raycast": {
+    "prefix": "raycast",
+    "body": [
+      "hit = raycast(from=${1:enemy.position}, direction=${2:[1, 0]}, distance=${3:300})",
+      "if hit and hit.object == ${4:hero}",
+      "\t$0"
+    ],
+    "description": "look along a line for objects"
+  },
+  "rewind": {
+    "prefix": "rewind",
+    "body": [
+      "rewind ${1:score} by ${2:1} steps"
+    ],
+    "description": "rewind a variable's history"
+  },
+  "scene": {
+    "prefix": "scene",
+    "body": [
+      "scene name=\"${1:main}\"",
+      "\t${2:plane} width=10 height=10 seg=64"
+    ],
+    "description": "declare a 3D scene"
+  },
+  "gui": {
+    "prefix": "gui",
+    "body": [
+      "gui window \"${1:menu}\" width=${2:400} height=${3:400} centered=true",
+      "\tbox position=top_bar height=50 color=#1A1A1A",
+      "\t\ttext \"${4:Title}\" position=center color=#FFFFFF",
+      "\tbutton \"${5:OK}\" size=200,40 then",
+      "\t\t$0"
+    ],
+    "description": "declare a GUI window"
+  },
+  "test": {
+    "prefix": "test",
+    "body": [
+      "test \"${1:what it checks}\"",
+      "\texpect ${2:double(4)} == ${3:8}"
+    ],
+    "description": "a test block (run with eza test)"
+  }
+}

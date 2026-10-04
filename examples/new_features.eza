@@ -1,0 +1,47 @@
+# Math, break/continue, text interpolation and tweens
+print("sin(pi/2) =", sin(pi / 2), " cos(0) =", cos(0), " 180 degrees =", radians(180))
+print("angle to (1,1):", degrees(atan2(1, 1)))
+
+# break and continue
+each n in 10 then
+    if n % 2 == 0
+        continue
+    if n > 7
+        break
+    print("odd:", n)
+
+# text interpolation with {}
+score = 42
+name = "eza"
+print("Hello {name.upper}, your score is {score} and double is {score * 2}. Braces: {{ok}}")
+
+# tweens: the whole path is planned up front, one value per frame
+data Box
+    position = [0, 0, 0]
+    color = #FF0000
+
+crate = Box()
+tween crate.position.x to 10 over 4 steps ease linear
+print("animating:", crate.animating)
+each f in 4 then
+    tick
+    print("frame {f + 1}: x = {crate.position.x}")
+print("animating:", crate.is_tweening)
+
+# interruption handshake: a new tween starts from wherever the object is right now
+tween crate.position.x to 0 over 10 steps
+tick 3
+tween crate.position.x to 100 over 2 steps ease linear
+tick 2
+print("after interrupt:", crate.position.x)
+
+# a `change` kills a running tween too
+tween crate.color to #0000FF over 10 steps
+tick 5
+print("color half way:", crate.color)
+change crate.color to #00FF00
+tick 5
+print("color after change:", crate.color, crate.animating)
+
+rewind crate by 3 steps
+print("rewound:", crate.color, crate.position.x)

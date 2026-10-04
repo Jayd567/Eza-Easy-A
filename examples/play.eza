@@ -1,0 +1,89 @@
+# Run with:  eza play examples/play.eza
+# WASD move   SHIFT speed boost (persist)   hold Z to rewind time   SPACE jumps   C toggles the enemy's color   ESC pause menu   R glides the player home (tween)   click to shoot a homing bullet
+
+scene name="demo"
+    camera position=0,14,20
+    simplex freq=0.25 amp=0.25 octaves=3
+        plane width=30 height=30 seg=96
+    perlin freq=0.6 amp=0.4
+        sphere width=4 seg=64 position=-8,4,-6 color=#8E7CC3
+    cube position=-3,1,-3 width=2 height=2 color=#B08968
+    player position=0,2,0 speed=0.15 physics=true
+    enemy position=8,2,8 speed=0.05
+
+angle = 0
+boosts = 0
+
+# a prefab is a template; spawn makes a live copy. `fly` has a wait, so each bullet runs in the background.
+prefab Bullet
+    sphere width=0.5 color=#FFEB3B
+
+define fly shot
+    each step in 90
+        change shot.position by shot.dir * 0.5
+        wait 1 steps
+    destroy shot
+
+gui window "hud" x=16 y=16 width=260 height=70
+    box position=top_bar height=30 color=#1A1A1A
+        text "EZA DEMO" position=center color=#FFD700
+    text "Boosts used: 0" color=#FFFFFF
+
+gui window "pause_menu" width=400 height=260 centered=true visible=false
+    box position=top_bar height=50 color=#1A1A1A
+        text "GAME PAUSED" position=center color=#FFFFFF
+    box position=fill
+        button "Resume" size=200,40 position=center color=#2E7D32 then change pause_menu.visible to false
+            on button.hover persist change button.color to #43A047
+
+on keyboard.pressed("escape")
+    change pause_menu.visible to not pause_menu.visible
+
+on scene.ticks
+    if pause_menu.visible
+        return
+    # player movement
+    if keyboard.held("w")
+        change player.position.z by -player.speed
+    if keyboard.held("s")
+        change player.position.z by player.speed
+    if keyboard.held("a")
+        change player.position.x by -player.speed
+    if keyboard.held("d")
+        change player.position.x by player.speed
+
+    # the enemy circles the arena
+    change angle by enemy.speed
+    change enemy.position.x to 8 * cos(angle)
+    change enemy.position.z to 8 * sin(angle)
+
+    # global rewind while Z is held
+    if keyboard.held("z")
+        rewind scene by 3 steps
+
+on keyboard.pressed("shift")
+    persist
+        change player.speed by 0.3
+        change player.scale to [1.4, 1.4, 1.4]
+    for 45 steps
+    change boosts by 1
+    change hud.children[1].label to "Boosts used: " + str(boosts)
+
+on keyboard.pressed("r")
+    tween player.position to [0, 2, 0] over 60 steps ease ease_out
+
+on keyboard.pressed("space")
+    if player.grounded
+        change player.velocity.y to 9
+
+on mouse.pressed("left")
+    fly(spawn Bullet at player.position + [0, 0.5, 0] dir=(enemy.position - player.position).normalize)
+
+on keyboard.pressed("c")
+    if enemy.color == #FFD700
+        change enemy.color to #E64D40
+    else
+        change enemy.color to #FFD700
+
+change enemy.color to #E64D40
+print("Eza demo running - WASD to move, SHIFT boost, hold Z to rewind, SPACE jump, C recolor, click flash, ESC pause, R home")

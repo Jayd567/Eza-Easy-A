@@ -1,0 +1,23 @@
+# Rewind: every change is a step on a timeline
+score = 10
+change score by 10
+change score by 5
+print(score)              # 25
+
+rewind score by 1 step
+print(score)              # 20
+
+rewind score by 10 steps  # more than exists -> clamps with a notice
+print(score)              # 10
+
+change score by 100       # writing after a rewind erases the old future
+print(score)              # 110
+
+lives = 3
+change lives by -1
+change score by 1
+rewind scene by 2 steps   # rewinds the whole world, newest steps first
+print(score, lives)       # 110 3
+
+rewind score to beginning
+print(score)              # 10

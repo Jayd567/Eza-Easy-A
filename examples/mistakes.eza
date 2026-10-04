@@ -1,0 +1,10 @@
+# This file has mistakes ON PURPOSE. Try:  eza check examples/mistakes.eza
+score = 10
+define heal target, amount
+    return target.hp + amount
+
+print(scroe)
+player = {hp: 50}
+print(heal(player))
+print(heal(player, 5, 99))
+score = 20
