@@ -1,4 +1,55 @@
 {
+  "data with functions": {
+    "prefix": "class",
+    "body": [
+      "data ${1:Enemy}",
+      "\t${2:hp} = ${3:100}",
+      "",
+      "\tdefine setup",
+      "\t\t${4:print(\"new $1\")}",
+      "",
+      "\tdefine ${5:take_damage}, ${6:amount}",
+      "\t\tchange self.$2 by -$6"
+    ],
+    "description": "a type with fields and its own functions (a class)"
+  },
+  "use": {
+    "prefix": "use",
+    "body": [
+      "use \"${1:enemies}.eza\""
+    ],
+    "description": "load a module (its names are reached as enemies.name)"
+  },
+  "args": {
+    "prefix": "args",
+    "body": [
+      "if len(args) < ${1:1}",
+      "\tprint(\"usage: eza ${2:tool}.eza <${3:file}>\")",
+      "else",
+      "\t${4:path} = args[0]",
+      "\t$0"
+    ],
+    "description": "read the words typed after the script's name"
+  },
+  "eachfile": {
+    "prefix": "eachfile",
+    "body": [
+      "each ${1:path} in files(\"${2:.}\", \"${3:*.txt}\")",
+      "\t$0"
+    ],
+    "description": "do something with every file in a folder"
+  },
+  "run": {
+    "prefix": "run",
+    "body": [
+      "${1:result} = run(\"${2:git status}\")",
+      "if $1.ok",
+      "\tprint($1.output)",
+      "else",
+      "\tprint(\"failed:\", $1.errors)"
+    ],
+    "description": "run another program and check how it went"
+  },
   "filter": {
     "prefix": "filter",
     "body": [

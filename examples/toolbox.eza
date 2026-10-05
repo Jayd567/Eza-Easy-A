@@ -1,0 +1,27 @@
+# A small command-line tool: counts the words in files.
+#   eza toolbox.eza            every .eza file in this folder
+#   eza toolbox.eza "*.md"     or any other pattern
+use "lib/textstats.eza" as stats
+
+pattern = "*.eza"
+if len(args) > 0
+    change pattern to args[0]
+
+found = files(".", pattern)
+print("Found", len(found), "files matching", pattern)
+each path in found
+    info = file_info(path)
+    if info.size < 1000000
+        print("  " + stats.summary(path, load path))
+print("Most words:", stats.biggest())
+
+# keep a copy of the results in a folder of their own
+make_folder("output")
+save found to "output/last_run.json"
+
+# ask another program something (git, if it's installed)
+attempt
+    git = run(["git", "--version"])
+    print("git says:", git.output.trim)
+handle problem
+    print("git isn't installed:", problem)

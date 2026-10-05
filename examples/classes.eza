@@ -1,0 +1,37 @@
+# Types with their own functions (classes). `class` works too, instead of `data`.
+data Enemy
+    name = ""
+    hp = 100
+
+    define setup                       # runs on every new Enemy
+        print("{self.name} appears")
+
+    define take_damage, amount
+        change self.hp by -amount
+        if self.hp < 0
+            change self.hp to 0
+
+    define is_dead
+        return self.hp <= 0
+
+data Boss from Enemy                   # everything Enemy has, plus more
+    hp = 300
+    phase = 1
+
+    define take_damage, amount
+        super.take_damage(amount / 2)  # Enemy's version, half the damage
+        if self.hp < 150
+            change self.phase to 2
+
+enemies = [Enemy(name="Goblin"), Enemy(name="Orc"), Boss(name="Dragon")]
+each round in 4
+    each e in enemies
+        e.take_damage(40)
+print(enemies.map(e -> "{e.name}: {e.hp} hp"))
+print("still standing:", enemies.filter(e -> not e.is_dead).map(e -> e.name))
+print("dragon phase:", enemies[2].phase, " is a boss:", enemies[2].is_a(Boss), " is an enemy:", enemies[2].is_a(Enemy))
+
+test "bosses take half damage"
+    b = Boss(name="Test")
+    b.take_damage(100)
+    expect b.hp == 250

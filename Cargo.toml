@@ -1,0 +1,43 @@
+[package]
+name = "eza"
+version = "0.1.0"
+edition = "2021"
+description = "The Eza programming language"
+
+[features]
+# `cargo install --path . --features engine` adds `eza play` (3D window via Bevy)
+engine = ["dep:bevy", "dep:blake3"]
+
+[dependencies]
+# pure-Rust image decoding for `load "picture.png"` (the same crate Bevy uses)
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "bmp"] }
+bevy = { version = "0.15", optional = true, default-features = false, features = [
+    "bevy_winit", "bevy_window", "bevy_render", "bevy_core_pipeline", "bevy_pbr",
+    "multi_threaded", "tonemapping_luts", "ktx2", "zstd",
+    "bevy_ui", "bevy_text", "default_font", "bevy_sprite",
+    "bevy_audio", "wav", "vorbis", "mp3",
+] }
+# `fetch(url)`: HTTP with the operating system's own TLS (no C compiler needed)
+ureq = { version = "2", default-features = false, features = ["native-tls", "gzip"] }
+native-tls = "0.2"
+# dates and times: now(), today(), date("2026-10-04")
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+# text patterns: .matches, .find_all
+regex = { version = "1", default-features = false, features = ["std", "unicode-perl", "unicode-case"] }
+# "pure" avoids needing a C compiler for Bevy's asset hashing on the GNU toolchain
+blake3 = { version = "1", optional = true, features = ["pure"] }
+# a much faster memory allocator than Windows' own (scripts create lots of small values)
+mimalloc = { version = "0.1", default-features = false }
+
+[profile.release]
+opt-level = 3
+# smaller eza.exe (and smaller `eza build` folders)
+strip = true
+
+# the interpreter itself in one piece, so the compiler can optimize across all of it
+[profile.release.package.eza]
+codegen-units = 1
+strip = true
+
+[profile.dev.package."*"]
+opt-level = 2

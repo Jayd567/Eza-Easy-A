@@ -1,6 +1,6 @@
 # The Eza Beginner's Guide
 
-This guide covers every operation and piece of syntax in the Eza language, from your first `print` to 3D scenes, 2D games, physics, particles, sound, time travel and menus. Read it top to bottom the first time, then use the [cheat sheet](#43-cheat-sheet) at the end as a quick reference.
+This guide covers every operation and piece of syntax in the Eza language, from your first `print` to 3D scenes, 2D games, physics, particles, sound, time travel and menus. Read it top to bottom the first time, then use the [cheat sheet](#47-cheat-sheet) at the end as a quick reference.
 
 ## Contents
 
@@ -23,31 +23,35 @@ This guide covers every operation and piece of syntax in the Eza language, from 
 17. [Working with lists: `filter`, `map`, `group_by`](#17-working-with-lists-filter-map-group_by)
 18. [Handling errors: `attempt` / `handle`](#18-handling-errors-attempt--handle)
 19. [Multiple files, settings and shared values](#19-multiple-files-settings-and-shared-values)
-20. [Files and pictures: `load`, `save`, `append`](#20-files-and-pictures-load-save-append)
-21. [Dates and times](#21-dates-and-times)
-22. [The web: `fetch`](#22-the-web-fetch)
-23. [Saving records: `database`](#23-saving-records-database)
-24. [Built-in functions](#24-built-in-functions)
-25. [Time: frames and `tick`](#25-time-frames-and-tick)
-26. [Reacting to things: `on`](#26-reacting-to-things-on)
-27. [Pausing: `wait`](#27-pausing-wait)
-28. [Temporary effects: `persist`](#28-temporary-effects-persist)
-29. [Smooth animation: `tween`](#29-smooth-animation-tween)
-30. [Time travel: `rewind`](#30-time-travel-rewind)
-31. [Predicting the future: `mimic`](#31-predicting-the-future-mimic)
-32. [3D worlds: `scene`](#32-3d-worlds-scene)
-33. [2D worlds: `stage`](#33-2d-worlds-stage)
-34. [Particles: sparks, smoke, snow](#34-particles-sparks-smoke-snow)
-35. [Templates and live objects: `prefab`, `spawn`, `destroy`](#35-templates-and-live-objects-prefab-spawn-destroy)
-36. [Sound and music: `play`, `stop`](#36-sound-and-music-play-stop)
-37. [Menus and HUDs: `gui`](#37-menus-and-huds-gui)
-38. [Styles: making menus look good](#38-styles-making-menus-look-good)
-39. [Charts](#39-charts)
-40. [Switching scripts: `go to`](#40-switching-scripts-go-to)
-41. [Finding and fixing mistakes](#41-finding-and-fixing-mistakes)
-42. [Sharing your program: `eza build`](#42-sharing-your-program-eza-build)
-43. [Cheat sheet](#43-cheat-sheet)
-44. [Common errors and what they mean](#44-common-errors-and-what-they-mean)
+20. [Modules: `use`](#20-modules-use)
+21. [Files and pictures: `load`, `save`, `append`](#21-files-and-pictures-load-save-append)
+22. [Dates and times](#22-dates-and-times)
+23. [The web: `fetch`](#23-the-web-fetch)
+24. [Saving records: `database`](#24-saving-records-database)
+25. [Files and folders](#25-files-and-folders)
+26. [Running other programs: `run`](#26-running-other-programs-run)
+27. [Command-line arguments: `args`](#27-command-line-arguments-args)
+28. [Built-in functions](#28-built-in-functions)
+29. [Time: frames and `tick`](#29-time-frames-and-tick)
+30. [Reacting to things: `on`](#30-reacting-to-things-on)
+31. [Pausing: `wait`](#31-pausing-wait)
+32. [Temporary effects: `persist`](#32-temporary-effects-persist)
+33. [Smooth animation: `tween`](#33-smooth-animation-tween)
+34. [Time travel: `rewind`](#34-time-travel-rewind)
+35. [Predicting the future: `mimic`](#35-predicting-the-future-mimic)
+36. [3D worlds: `scene`](#36-3d-worlds-scene)
+37. [2D worlds: `stage`](#37-2d-worlds-stage)
+38. [Particles: sparks, smoke, snow](#38-particles-sparks-smoke-snow)
+39. [Templates and live objects: `prefab`, `spawn`, `destroy`](#39-templates-and-live-objects-prefab-spawn-destroy)
+40. [Sound and music: `play`, `stop`](#40-sound-and-music-play-stop)
+41. [Menus and HUDs: `gui`](#41-menus-and-huds-gui)
+42. [Styles: making menus look good](#42-styles-making-menus-look-good)
+43. [Charts](#43-charts)
+44. [Switching scripts: `go to`](#44-switching-scripts-go-to)
+45. [Finding and fixing mistakes](#45-finding-and-fixing-mistakes)
+46. [Sharing your program: `eza build`](#46-sharing-your-program-eza-build)
+47. [Cheat sheet](#47-cheat-sheet)
+48. [Common errors and what they mean](#48-common-errors-and-what-they-mean)
 
 ---
 
@@ -61,9 +65,10 @@ Eza scripts are plain text files ending in `.eza`. Run them from a terminal:
 | `eza game.eza` | Runs a script. If it has a `scene`, `stage` or `gui`, a window opens |
 | `eza play game.eza` | Exactly the same as `eza game.eza` |
 | `eza run game.eza` | Runs a script in the terminal only, never opens a window |
-| `eza check game.eza` | Finds mistakes without running anything (prints `OK`). See [finding mistakes](#41-finding-and-fixing-mistakes) |
+| `eza tool.eza a b` | Runs a script and hands it `a` and `b` in [`args`](#27-command-line-arguments-args) |
+| `eza check game.eza` | Finds mistakes without running anything (prints `OK`). See [finding mistakes](#45-finding-and-fixing-mistakes) |
 | `eza test` | Runs the `test` blocks in every `.eza` file in this folder (or `eza test game.eza`) |
-| `eza build game.eza` | Makes `dist/game/game.exe` to share. See [sharing](#42-sharing-your-program-eza-build) |
+| `eza build game.eza` | Makes `dist/game/game.exe` to share. See [sharing](#46-sharing-your-program-eza-build) |
 | `eza --version` | Shows the version (`-v` also works) |
 | `eza help` | Shows the list of commands (`--help` and `-h` also work) |
 
@@ -249,7 +254,7 @@ print(total)                  # 12
 
 ### Every change is remembered
 
-Each `change` is a step on a timeline, and Eza remembers the last 1000 steps of every variable. That's what powers [`rewind`](#30-time-travel-rewind).
+Each `change` is a step on a timeline, and Eza remembers the last 1000 steps of every variable. That's what powers [`rewind`](#34-time-travel-rewind).
 
 ---
 
@@ -545,7 +550,7 @@ change fruits by "fig"          # add to the end
 
 Lists also work with `push` and `pop` (see [stacks](#9-stacks-and-queues)): `push 4 to nums` adds to the end, `pop nums` takes the last item off and gives it back.
 
-> **Big lists are fast too.** Lists (and dictionaries) with more than 256 items are changed in place instead of being copied for [`rewind`](#30-time-travel-rewind), so things like `memory = [0].repeat(30000)` stay quick. The catch: those big ones can't be rewound.
+> **Big lists are fast too.** Lists (and dictionaries) with more than 256 items are changed in place instead of being copied for [`rewind`](#34-time-travel-rewind), so things like `memory = [0].repeat(30000)` stay quick. The catch: those big ones can't be rewound.
 
 ### Joining lists
 
@@ -644,7 +649,7 @@ each key in settings
     print(key, "=", settings[key])
 ```
 
-Dictionaries are also what `.json` files turn into. See [files](#20-files-and-pictures-load-save-append).
+Dictionaries are also what `.json` files turn into. See [files](#21-files-and-pictures-load-save-append).
 
 ---
 
@@ -721,7 +726,7 @@ Write a color as `#` followed by hex digits, in any of these forms:
 | `.invert` | opposite color | `#FF0000.invert` is `#00FFFF` |
 | `.saturate(t)` | more vivid (negative `t` = duller) | `#808080.saturate(0.5)` |
 
-Colors can be compared with `==` and animated with [`tween`](#29-smooth-animation-tween).
+Colors can be compared with `==` and animated with [`tween`](#33-smooth-animation-tween).
 
 ---
 
@@ -845,9 +850,9 @@ print(calculate_damage(multiplier=2, base=10))    # 20
 
 Passing too many arguments, or leaving one out, is an error.
 
-### Functions can change objects you pass in
+### Functions can change objects and lists you pass in
 
-When you pass an object stored in a variable, the function works on the real object, not a copy:
+When you pass an object or a list stored in a variable, the function works on the real thing, not a copy:
 
 ```eza
 define push_back, thing
@@ -856,7 +861,14 @@ define push_back, thing
 push_back(enemy)       # enemy really moves
 ```
 
-Numbers, text and lists are copied, so changing them inside a function doesn't affect the caller.
+```eza
+define add_bonus, scores
+    change scores by 100
+
+add_bonus(my_scores)   # my_scores really gets the 100
+```
+
+Numbers and text are copied, so changing them inside a function doesn't affect the caller.
 
 ### Functions stored in variables
 
@@ -928,6 +940,76 @@ print(sword)             # Item(name: "Sword", weight: 3.5, equippable: true)
 - Properties you don't give keep their defaults.
 - Naming a property the type doesn't have is an error.
 - You can still add new properties later with `change sword.rarity to "epic"`.
+- `class` is another word for `data`, if you're used to Python: `class Item` works exactly the same.
+
+### Functions inside a type
+
+A type can have its own functions (often called **methods**). Inside them, `self` is the object the function was called on:
+
+```eza
+data Enemy
+    name = ""
+    hp = 100
+
+    define take_damage, amount
+        change self.hp by -amount
+
+    define is_dead
+        return self.hp <= 0
+
+goblin = Enemy(name="Goblin")
+goblin.take_damage(30)
+print(goblin.hp)            # 70
+print(goblin.is_dead)       # false
+```
+
+- Call them with a dot: `goblin.take_damage(30)`.
+- A function with no arguments works without `()`, just like `.length` or `.upper`: `goblin.is_dead`.
+- Changes to `self` change the real object, wherever it lives: `goblin`, `enemies[2]`, `team.leader`, or an object passed into a function.
+- They're ordinary changes, so `rewind` and the F1 debugger see them too.
+
+### `setup`: when a new object is made
+
+A function called `setup` runs on every new object, right after its properties are filled in:
+
+```eza
+data Player
+    name = "Player"
+    hp = 100
+    inventory = []
+
+    define setup
+        print("{self.name} joins the game")
+        change self.inventory to ["map"]
+
+ada = Player(name="Ada")    # prints: Ada joins the game
+```
+
+### Building on another type: `from`
+
+`data Boss from Enemy` makes a new type that starts with everything `Enemy` has: its properties, with their defaults, and its functions. Then it adds its own, or replaces some:
+
+```eza
+data Boss from Enemy
+    hp = 300                 # a different default
+    phase = 1                # a new property
+
+    define take_damage, amount
+        super.take_damage(amount / 2)      # Enemy's version, with half the damage
+        if self.hp < 150
+            change self.phase to 2
+
+dragon = Boss(name="Dragon")
+dragon.take_damage(100)
+print(dragon.hp, dragon.phase)     # 250 1
+print(dragon.is_dead)              # false - is_dead comes from Enemy
+```
+
+- `super.name(...)` calls the version from the type it was built from, on the same object.
+- `x.is_a(Enemy)` is `true` for an `Enemy`, and for anything built from `Enemy` (like a `Boss`). `type(x)` gives the exact type's name, like `"Boss"`.
+- A type can be built from a type that was itself built from another one, as many levels as you like.
+
+> Saving an object with `save` keeps its properties but not its type. Loading it back gives a plain dictionary.
 
 ---
 
@@ -958,7 +1040,7 @@ print(scores.count(s -> s < 10))        # 2      how many
 
 ### Lists of dictionaries
 
-Real data often looks like a list of dictionaries (that's what [CSV files](#csv-files-spreadsheets) and [databases](#23-saving-records-database) give you). Two shortcuts help:
+Real data often looks like a list of dictionaries (that's what [CSV files](#csv-files-spreadsheets) and [databases](#24-saving-records-database) give you). Two shortcuts help:
 
 - A **dictionary works as a pattern** in `filter`, `find`, `count`, `any` and `all`: it matches items that have those fields with those values.
 - `group_by` can take a **field name** instead of a function.
@@ -1017,7 +1099,7 @@ include "enemies.eza"
 include "lib/helpers.eza"
 ```
 
-Runs the other file right there, so its variables and functions become available. The path is relative to the file doing the including. Each file is only ever included once, even if several files include it.
+Runs the other file right there, so its variables and functions become available. The path is relative to the file doing the including. Each file is only ever included once, even if several files include it. To keep its names separate from yours, [`use`](#20-modules-use) it instead.
 
 ### `param`: settings
 
@@ -1042,7 +1124,7 @@ change global["online_mode"] to false
 print(global.get("online_mode", true))
 ```
 
-It's also the one thing (besides the volume) that survives [`go to`](#40-switching-scripts-go-to), so it's how one script passes values to the next.
+It's also the one thing (besides the volume) that survives [`go to`](#44-switching-scripts-go-to), so it's how one script passes values to the next.
 
 ### Other built-in names
 
@@ -1054,11 +1136,83 @@ It's also the one thing (besides the volume) that survives [`go to`](#40-switchi
 | `screen` | window size: `screen.width`, `screen.height` (1280 x 720 until a window opens) |
 | `scene` | your 3D world, once you write a `scene` block |
 | `stage` | your 2D world, once you write a `stage` block |
-| `sound` | `sound.volume`, the master volume (see [sound](#36-sound-and-music-play-stop)) |
+| `sound` | `sound.volume`, the master volume (see [sound](#40-sound-and-music-play-stop)) |
+| `args` | the words typed after the script's name (see [`args`](#27-command-line-arguments-args)) |
 
 ---
 
-## 20. Files and pictures: `load`, `save`, `append`
+## 20. Modules: `use`
+
+When a program grows, split it into files. `include` pastes another file's names into yours. `use` keeps them in their own box, called a **module**, and you reach inside with a dot:
+
+```eza
+# enemies.eza
+count = 0
+
+define make, name
+    change count by 1
+    return {name: name, hp: 30}
+```
+
+```eza
+# game.eza
+use "enemies.eza"
+
+goblin = enemies.make("goblin")
+orc = enemies.make("orc")
+print(enemies.count)       # 2
+```
+
+- The module is named after its file: `use "enemies.eza"` gives you `enemies`. Pick another name with `as`: `use "lib/enemy_tools.eza" as foes`.
+- `use enemies` (no quotes) is short for `use "enemies.eza"`.
+- The path is relative to the file that has the `use` line.
+- A module runs **once**, the first time something uses it. Using it again (from any file) gives the same module, with the same variables.
+- Its names don't clash with yours: both files can have their own `count`.
+- Names starting with `_` are **private**: `_cache` can only be used inside its own file.
+- `print(enemies)` shows what's inside: `<module enemies: count, make>`.
+
+### Changing a module's variables
+
+From outside, you can read a module's variables but not change them. Give the module a function that does it:
+
+```eza
+# enemies.eza
+difficulty = 1
+
+define set_difficulty, level
+    change difficulty to level
+```
+
+```eza
+# game.eza
+use "enemies.eza"
+enemies.set_difficulty(3)          # fine
+change enemies.difficulty to 3     # error: only enemies.eza can change it
+```
+
+That way a module stays in charge of its own data, and you always know where a change came from.
+
+### What a module can see
+
+- The built-in names (`keyboard`, `mouse`, `screen`, `global`, `sound`, `args`, `pi`) work inside a module as usual.
+- Your main file's variables don't. Pass what a module needs into its functions: `enemies.chase(player)`.
+- Keep `scene`, `stage` and `gui` blocks in your main file (or a file it `include`s), not in modules.
+- Two modules can't `use` each other. Eza stops with a message if they do: put what they share into a third file that both use.
+
+### `include` or `use`?
+
+| | `include "x.eza"` | `use "x.eza"` |
+|---|---|---|
+| Its names | become yours | stay in the module: `x.name` |
+| Same name in both files | one replaces the other | no problem |
+| Private names | no | names starting with `_` |
+| Good for | splitting one program into parts | reusable tools, libraries, bigger projects |
+
+[`eza check`](#eza-check-catch-mistakes-before-running) follows modules too. It checks each module file, and catches typos like `enemies.mkae("orc")` with `Did you mean 'make'?`.
+
+---
+
+## 21. Files and pictures: `load`, `save`, `append`
 
 Paths are always relative to the script's own folder, so `"saves/game.json"` means the `saves` folder next to your script.
 
@@ -1106,7 +1260,7 @@ if c == #FF0000
 print(c.a)                        # 0 means see-through
 ```
 
-Pictures are also what you give to [sprites](#33-2d-worlds-stage) with `texture=`.
+Pictures are also what you give to [sprites](#37-2d-worlds-stage) with `texture=`.
 
 <a id="csv-files-spreadsheets"></a>
 ### CSV files (spreadsheets)
@@ -1138,7 +1292,7 @@ A list of lists works too: each inner list is one row.
 
 ---
 
-## 21. Dates and times
+## 22. Dates and times
 
 ```eza
 right_now = now()                  # the date and time right now
@@ -1197,7 +1351,7 @@ When a date is saved to a JSON file or a database it's written as text (`"2026-1
 
 ---
 
-## 22. The web: `fetch`
+## 23. The web: `fetch`
 
 `fetch` downloads something from the internet. When the answer is JSON (which most web APIs use), you get dictionaries and lists; otherwise you get text.
 
@@ -1236,7 +1390,7 @@ handle problem
 
 ---
 
-## 23. Saving records: `database`
+## 24. Saving records: `database`
 
 A database keeps **records** (dictionaries) in a file, and saves after every change, so the data is still there next time the program runs. It's perfect for to-do lists, high scores, inventories and notes.
 
@@ -1284,11 +1438,144 @@ notes.clear()                                # remove everything
 
 - The path is relative to the script. The file is plain JSON, so you can open it in any text editor.
 - Records you get back are copies: change them with `.update`, not `change`.
-- A database isn't part of the [`rewind`](#30-time-travel-rewind) timeline. It's real saved data.
+- A database isn't part of the [`rewind`](#34-time-travel-rewind) timeline. It's real saved data.
 
 ---
 
-## 24. Built-in functions
+## 25. Files and folders
+
+These work with whole files and folders. To read and write what's *inside* a file, see [`load` and `save`](#21-files-and-pictures-load-save-append). As everywhere else, paths are relative to the script's folder.
+
+### Looking around
+
+```eza
+print(files())                          # every file next to the script
+print(files("photos"))                  # ["photos/cat.png", "photos/dog.jpg"]
+print(files("photos", "*.png"))         # only the .png files
+print(folders("saves"))                 # the folders inside saves
+print(find_files("notes", "*.txt"))     # also looks inside every folder within notes
+```
+
+The paths they give back are sorted A to Z, and can go straight into `load`, `copy_file` and the rest.
+
+In a pattern, `*` means "anything" and `?` means "any one character": `"*.csv"`, `"report_??.txt"`, `"*2026*"`. Capitals don't matter.
+
+### Facts about a file
+
+```eza
+info = file_info("notes.txt")
+print(info.size)          # in bytes
+print(info.modified)      # a date, like 2026-10-04 18:30:00
+```
+
+| Field | What it is |
+|---|---|
+| `name` | `"notes.txt"` |
+| `extension` | `"txt"` (`""` if there isn't one) |
+| `folder` | the folder part of the path |
+| `size` | the size in bytes (`0` for folders) |
+| `modified` | when it last changed, as a [date](#22-dates-and-times) |
+| `is_folder` | `true` for folders |
+
+`exists(path)` tells you whether a file or folder is there, and `is_folder(path)` whether it's a folder.
+
+### Making, copying, moving, deleting
+
+| Function | What it does |
+|---|---|
+| `make_folder("saves/slot1")` | makes the folder (and any missing folders above it) |
+| `copy_file("a.txt", "backup/a.txt")` | copies a file, or a whole folder with everything in it |
+| `copy_file("a.txt", "backup")` | into a folder that already exists: keeps the name, so you get `backup/a.txt` |
+| `move_file("a.txt", "old/a.txt")` | moves a file or folder; also renames: `move_file("a.txt", "b.txt")` |
+| `delete_file("old.txt")` | deletes a file (not a folder) |
+| `delete_folder("temp")` | deletes a folder **and everything in it** |
+
+Any folders the destination needs are made automatically.
+
+> Deleted files don't go to the Recycle Bin, so take care with `delete_file` and `delete_folder`. As a safety net, `delete_folder` refuses to delete the folder your script is in, your home folder, or a whole drive.
+
+### Example: sort a messy folder
+
+```eza
+# moves every file in "downloads" into a folder named after its ending: downloads/png, downloads/pdf, ...
+each path in files("downloads")
+    info = file_info(path)
+    if info.extension != ""
+        folder = "downloads/" + info.extension.lower
+        make_folder(folder)
+        move_file(path, folder)
+```
+
+---
+
+## 26. Running other programs: `run`
+
+`run` starts another program, waits for it to finish, and gives back what it printed:
+
+```eza
+print(run("git status"))
+
+result = run("git log --oneline -5")
+if result.ok
+    each line in result.output.lines
+        print("commit:", line)
+else
+    print("git failed:", result.errors)
+```
+
+| Field | What it is |
+|---|---|
+| `output` | everything the program printed |
+| `errors` | its error messages |
+| `code` | its exit code (`0` usually means success) |
+| `ok` | `true` if it succeeded |
+
+Printing the result itself shows the output, so `print(run("dir"))` just works.
+
+Write the command the way you'd type it in a terminal (Command Prompt on Windows). To start a program directly, with no terminal in between, give a list instead: `run(["git", "commit", "-m", "fixed the jump"])`. Then spaces and quotes inside the parts can't cause trouble.
+
+### Settings
+
+| Setting | What it does | Example |
+|---|---|---|
+| `input=` | types text into the program | `run("sort", input="pear\napple\n")` |
+| `folder=` | runs it in another folder (relative to the script) | `run("git pull", folder="my_game")` |
+| `show=true` | shows its output while it runs (then `output` stays empty) | `run("cargo build", show=true)` |
+
+Without `folder=`, programs run in the script's folder. A program can't ask you questions while it runs, so give it its answers up front with `input=`.
+
+If the program can't be started at all (it isn't installed, or the name is misspelled), that's an error: `can't start "gti status": ...`. A program that starts but then fails isn't an error, so check `.ok`.
+
+---
+
+## 27. Command-line arguments: `args`
+
+Words typed after the script's name reach the script in `args`, a list of text:
+
+```
+eza greet.eza Ada 3
+```
+
+```eza
+# greet.eza
+if len(args) < 2
+    print("usage: eza greet.eza <name> <times>")
+else
+    name = args[0]
+    times = num(args[1])
+    each i in times
+        print("Hello, {name}!")
+```
+
+- `args` is always a list, and `[]` when nothing was typed.
+- Every item is text: turn numbers into numbers with `num(args[0])`.
+- Put words with spaces in quotes: `eza notes.eza "shopping list"` gives `["shopping list"]`.
+- It works the same with `eza run tool.eza a b` and `eza play game.eza a b`.
+- A program made with [`eza build`](#46-sharing-your-program-eza-build) gets them too: `greet.exe Ada 3`.
+
+---
+
+## 28. Built-in functions
 
 | Function | What it does | Example | Result |
 |---|---|---|---|
@@ -1309,10 +1596,13 @@ notes.clear()                                # remove everything
 | `lerp(a, b, t)` | blend between two values | | see [vectors](#11-vectors-positions-and-directions) |
 | math | `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`, `radians`, `degrees` | | see [numbers](#7-numbers) |
 | `stack(list)` / `queue(list)` | a new stack or queue, optionally with starting items | `stack([1, 2])` | |
-| `exists(path)` | is there a file at this path? | `exists("save.json")` | `true` / `false` |
-| `now()` / `today()` / `date(...)` | dates and times | `date("2026-10-04")` | see [dates](#21-dates-and-times) |
-| `fetch(url)` | download from the web | | see [the web](#22-the-web-fetch) |
-| `database(path)` | records saved in a file | | see [databases](#23-saving-records-database) |
+| `exists(path)` | is there a file or folder at this path? | `exists("save.json")` | `true` / `false` |
+| `files` / `folders` / `find_files` / `file_info` | look around folders | `files("photos", "*.png")` | see [files and folders](#25-files-and-folders) |
+| `make_folder` / `copy_file` / `move_file` / `delete_file` / `delete_folder` | change files and folders | `copy_file("a.txt", "backup")` | see [files and folders](#25-files-and-folders) |
+| `run(command)` | runs another program | `run("git status").output` | see [`run`](#26-running-other-programs-run) |
+| `now()` / `today()` / `date(...)` | dates and times | `date("2026-10-04")` | see [dates](#22-dates-and-times) |
+| `fetch(url)` | download from the web | | see [the web](#23-the-web-fetch) |
+| `database(path)` | records saved in a file | | see [databases](#24-saving-records-database) |
 | `raycast(from=, direction=, distance=)` | the first thing along a line | | see [2D](#touching-and-looking) |
 
 Every value also has two universal methods:
@@ -1320,13 +1610,13 @@ Every value also has two universal methods:
 - `x.type` is the same as `type(x)`
 - `x.to_string` is the same as `str(x)`
 
-Some things that read files or change things are **statements** instead of functions (no parentheses): `load`, `save`, `append`, `push`, `pop`, `play`, `stop`, `emit`, `go to`. They're explained in their own sections.
+Some things that read files or change things are **statements** instead of functions (no parentheses): `load`, `save`, `append`, `push`, `pop`, `play`, `stop`, `emit`, `go to`, `use`. They're explained in their own sections.
 
 > `print` needs parentheses: `print("hi")`, not `print "hi"`. `num("abc")` is an error because `"abc"` isn't a number.
 
 ---
 
-## 25. Time: frames and `tick`
+## 29. Time: frames and `tick`
 
 The features from here on are about **time**. Eza counts time in **frames** (also called **steps**). In the 3D window there are 60 frames per second, and the engine advances one frame automatically each time.
 
@@ -1350,7 +1640,7 @@ Each frame, in this order, Eza:
 
 ---
 
-## 26. Reacting to things: `on`
+## 30. Reacting to things: `on`
 
 `on` sets up code that runs **when a condition becomes true**:
 
@@ -1394,7 +1684,7 @@ on timer == 60                          # a value reaches something
 
 ---
 
-## 27. Pausing: `wait`
+## 31. Pausing: `wait`
 
 `wait` pauses a function or `on` block for a while, then carries on where it left off:
 
@@ -1427,7 +1717,7 @@ print("this prints right away")
 
 ---
 
-## 28. Temporary effects: `persist`
+## 32. Temporary effects: `persist`
 
 `persist` makes changes that **undo themselves** later, which is useful for power-ups, buffs and status effects. Write the changes, then say when they should end.
 
@@ -1488,7 +1778,7 @@ When the effect ends:
 
 ---
 
-## 29. Smooth animation: `tween`
+## 33. Smooth animation: `tween`
 
 `tween` slides a value smoothly to a new value over a number of frames:
 
@@ -1526,7 +1816,7 @@ if not door.animating
 
 ---
 
-## 30. Time travel: `rewind`
+## 34. Time travel: `rewind`
 
 Every `change` is recorded as a step, and `rewind` steps back through them.
 
@@ -1569,7 +1859,7 @@ History keeps the most recent 1000 steps.
 
 ---
 
-## 31. Predicting the future: `mimic`
+## 35. Predicting the future: `mimic`
 
 `mimic` runs a simulation on a **copy** of an object (a "shadow"), so you can see what would happen without changing the real thing. An AI can use this to look ahead.
 
@@ -1615,9 +1905,9 @@ Cannot modify global variable 'score' inside an isolated simulation block.
 
 ---
 
-## 32. 3D worlds: `scene`
+## 36. 3D worlds: `scene`
 
-A `scene` block describes a 3D world. **If your script has a `scene`, `eza yourfile.eza` opens a window and shows it.** Without one (and without a `stage` or `gui`), the script just runs in the terminal. For 2D games, see [`stage`](#33-2d-worlds-stage).
+A `scene` block describes a 3D world. **If your script has a `scene`, `eza yourfile.eza` opens a window and shows it.** Without one (and without a `stage` or `gui`), the script just runs in the terminal. For 2D games, see [`stage`](#37-2d-worlds-stage).
 
 ```eza
 scene name="demo"
@@ -1643,7 +1933,7 @@ kind "optional label" key=value key=value ...
   - `true` / `false`
   - bare words, which become text: `mood=angry`
   - vectors, as numbers with commas and no spaces: `position=0,1,0`
-- Variables and math can't go in property values: `position=x,0,0` would store the text `"x"`. To place things using calculations, `change` them after the scene, or use [`spawn`](#35-templates-and-live-objects-prefab-spawn-destroy).
+- Variables and math can't go in property values: `position=x,0,0` would store the text `"x"`. To place things using calculations, `change` them after the scene, or use [`spawn`](#39-templates-and-live-objects-prefab-spawn-destroy).
 
 ### Kinds of things
 
@@ -1655,7 +1945,7 @@ kind "optional label" key=value key=value ...
 | `cylinder` | tube | `width` (diameter), `height` |
 | `camera` | where you look from (always looks at the center) | `position` |
 | `light` | sunlight pointing at the center | `position`, `brightness` |
-| `particles` | sparks, smoke, fire (see [particles](#34-particles-sparks-smoke-snow)) | |
+| `particles` | sparks, smoke, fire (see [particles](#38-particles-sparks-smoke-snow)) | |
 | any other word | a character such as `player`, `enemy`, `tree` (drawn as a capsule) | |
 
 - If there's no `camera`, it sits at `0,12,18`. If there's no `light`, a default one is added.
@@ -1780,7 +2070,7 @@ There are two ways to use input, and both are fine:
 
 ---
 
-## 33. 2D worlds: `stage`
+## 37. 2D worlds: `stage`
 
 A `stage` block is the 2D version of a `scene`. **If your script has a `stage`, `eza yourfile.eza` opens a window.** You can even have a `scene` and a `stage` together; the 2D layer is drawn on top.
 
@@ -1830,7 +2120,7 @@ Sprites that share a picture are drawn together in one batch automatically, so h
 change hero.frame to 2
 ```
 
-To animate, use a function with [`wait`](#27-pausing-wait):
+To animate, use a function with [`wait`](#31-pausing-wait):
 
 ```eza
 define walk_cycle
@@ -1909,7 +2199,7 @@ Positions are 2-number vectors, and all the [vector math](#11-vectors-positions-
 
 ---
 
-## 34. Particles: sparks, smoke, snow
+## 38. Particles: sparks, smoke, snow
 
 Particles are lots of tiny dots that fly out, fade and disappear. Put a `particles` line in a `stage` (2D) or a `scene` (3D):
 
@@ -1966,7 +2256,7 @@ change sparks.color to #80D8FF
 
 ---
 
-## 35. Templates and live objects: `prefab`, `spawn`, `destroy`
+## 39. Templates and live objects: `prefab`, `spawn`, `destroy`
 
 ### `prefab`: a template
 
@@ -2028,7 +2318,7 @@ Because `fly` contains `wait`, each bullet flies on its own in the background.
 
 ---
 
-## 36. Sound and music: `play`, `stop`
+## 40. Sound and music: `play`, `stop`
 
 ```eza
 play "assets/sounds/coin.wav"                         # a sound effect
@@ -2060,13 +2350,13 @@ It's a great match for a [slider](#typing-dragging-ticking-choosing-inputs): `sl
 
 ### Music that keeps going
 
-If a looping sound is **already playing**, `play` with the same file doesn't restart it: it just updates its volume and speed. That means every level can start with the same `play "music.wav" loop=true` line, and when you [switch scripts](#40-switching-scripts-go-to) the music carries on smoothly. Looping sounds that the new script doesn't play are stopped.
+If a looping sound is **already playing**, `play` with the same file doesn't restart it: it just updates its volume and speed. That means every level can start with the same `play "music.wav" loop=true` line, and when you [switch scripts](#44-switching-scripts-go-to) the music carries on smoothly. Looping sounds that the new script doesn't play are stopped.
 
 Sound only plays in a window. In a terminal-only script, `play` still checks that the file exists, but stays silent.
 
 ---
 
-## 37. Menus and HUDs: `gui`
+## 41. Menus and HUDs: `gui`
 
 A `gui` block builds a 2D window of boxes, text, buttons and inputs drawn on top of everything else. A script with only a `gui` (no scene or stage) still opens a window, so you can make plain apps too.
 
@@ -2099,7 +2389,7 @@ change title.label to "PAUSED!"
 | `slider` | a bar with a knob you drag |
 | `checkbox` | a tick box with a label |
 | `dropdown` | a button that opens a list of choices |
-| `chart` | a bar, line or pie chart of a variable (see [charts](#39-charts)) |
+| `chart` | a bar, line or pie chart of a variable (see [charts](#43-charts)) |
 
 ### Properties
 
@@ -2115,8 +2405,8 @@ change title.label to "PAUSED!"
 | `color` | background (or the text color, for `text`) |
 | `text_color` | label color on a button |
 | `font_size` | text size in points (default 12, which is 16 pixels) |
-| `background`, `rounded`, `border`, `glow`, `shadow`, `font` | see [styles](#38-styles-making-menus-look-good) |
-| `style=name` | use a [style](#38-styles-making-menus-look-good) |
+| `background`, `rounded`, `border`, `glow`, `shadow`, `font` | see [styles](#42-styles-making-menus-look-good) |
+| `style=name` | use a [style](#42-styles-making-menus-look-good) |
 | `visible` | `false` hides it and everything inside |
 
 Elements without a size fit their contents.
@@ -2184,7 +2474,7 @@ gui window "settings" centered=true padding=20 gap=10
 - If the variable already exists and you don't give a starting value, the input shows what's in it. That's why the example sets `volume = sound.volume` first.
 - Code after `then` runs **whenever the user changes the value**: every move of a slider, every tick of a checkbox, every choice in a dropdown. For a textbox it runs when **Enter** is pressed.
 - Click a textbox to type in it. Backspace deletes, and Enter or Escape (or clicking elsewhere) finishes.
-- Inputs use `style=` and the [style properties](#38-styles-making-menus-look-good) like everything else.
+- Inputs use `style=` and the [style properties](#42-styles-making-menus-look-good) like everything else.
 
 ### Updating the screen
 
@@ -2197,7 +2487,7 @@ on keyboard.pressed("escape")
 
 ---
 
-## 38. Styles: making menus look good
+## 42. Styles: making menus look good
 
 A `style` is a reusable look, a bit like CSS on websites. Write it once and use it on as many elements as you like:
 
@@ -2247,7 +2537,7 @@ CSS-style names work too: `background-color`, `border-radius`, `font-size`, `fon
 
 ---
 
-## 39. Charts
+## 43. Charts
 
 A `chart` in a `gui` draws a bar, line or pie chart of a variable, and **redraws by itself whenever that variable changes**:
 
@@ -2277,13 +2567,13 @@ on keyboard.pressed("space")
 | `color` | one color for every bar / the line | |
 | `colors=#4C9AFF,#FF8A65,...` | colors to cycle through | a built-in palette |
 | `width`, `height` | size | `360`, `220` |
-| `background`, `rounded`, ... | the panel's look, like any [element](#38-styles-making-menus-look-good) | dark panel |
+| `background`, `rounded`, ... | the panel's look, like any [element](#42-styles-making-menus-look-good) | dark panel |
 
 Bar and line charts get a scale with round numbers. Pie charts get a legend with each value and its percentage.
 
 ---
 
-## 40. Switching scripts: `go to`
+## 44. Switching scripts: `go to`
 
 Bigger games are easier to build as several files: a menu, a few levels, a game-over screen. `go to` switches to another script **in the same window**:
 
@@ -2319,7 +2609,7 @@ See `examples/menu.eza` and `examples/arena.eza` for a complete menu â†’ game â†
 
 ---
 
-## 41. Finding and fixing mistakes
+## 45. Finding and fixing mistakes
 
 ### `eza check`: catch mistakes before running
 
@@ -2327,13 +2617,14 @@ See `examples/menu.eza` and `examples/arena.eza` for a complete menu â†’ game â†
 eza check game.eza
 ```
 
-This reads your program (and every file it `include`s) without running it, and reports:
+This reads your program (and every file it `include`s or `use`s) without running it, and reports:
 
 - **names that are never created**, with a suggestion: `'scroe' isn't created anywhere in this program. Did you mean 'score'?`
 - **wrong argument counts**: `heal takes 2 argument(s) but you gave 3`, `heal is missing the argument 'amount'`
 - **named arguments that don't exist**: `heal has no parameter called 'amont'`
 - **`=` used twice for the same name** in one block (use `change`)
 - **`go to` a script that isn't there**
+- **names a module doesn't have**: `the module enemies has no 'mkae'. Did you mean 'make'?`, and private `_names` used from outside
 - every **syntax error**
 
 It prints `OK` when it finds nothing. In VS Code it runs every time you save, and puts a squiggle under each problem.
@@ -2391,7 +2682,7 @@ Spawned and destroyed objects, particles, and lists or dictionaries with more th
 
 ---
 
-## 42. Sharing your program: `eza build`
+## 46. Sharing your program: `eza build`
 
 ```
 eza build game.eza
@@ -2407,11 +2698,12 @@ Zip the `dist/game` folder and send it. Building again replaces the old build.
 - `eza build` runs [`eza check`](#eza-check-catch-mistakes-before-running) first and refuses to build a program with mistakes in it.
 - The exe is about 60 MB, because it contains the whole Eza language and the game engine.
 - A console window opens next to the program, which shows anything you `print`. If the program stops with an error, the console waits for Enter so the message can be read.
+- Words typed after the program's name reach the script as [`args`](#27-command-line-arguments-args): `game.exe easy`.
 - It makes Windows programs (`.exe`).
 
 ---
 
-## 43. Cheat sheet
+## 47. Cheat sheet
 
 ```eza
 # ---- basics
@@ -2444,6 +2736,16 @@ data Point
     x = 0
     y = 0
 pt = Point(1, 2)
+data Enemy                    # (or: class Enemy)
+    hp = 100
+    define setup              # runs on every new one
+        ...
+    define hit, n
+        change self.hp by -n
+data Boss from Enemy
+    define hit, n
+        super.hit(n / 2)
+e = Enemy()   e.hit(5)   e.is_a(Enemy)
 
 # ---- errors and files
 attempt
@@ -2530,11 +2832,18 @@ data = fetch("https://...")   fetch(url, send={a: 1})
 db = database("notes.db")   db.add({title: "x"})   db.find({done: false})   db.update(rec, {done: true})   db.remove(rec)
 chart "Sales" kind=bar data=sales      # inside a gui
 eza build game.eza                     # in the terminal: dist/game/game.exe
+
+# ---- modules, files and programs
+use "enemies.eza"   enemies.make("orc")   use "lib/tools.eza" as t   _private_name
+args                                   # eza tool.eza a b  ->  ["a", "b"]
+files("photos", "*.png")   folders(".")   find_files("notes", "*.txt")   file_info("a.txt").size
+make_folder("out")   copy_file("a.txt", "out")   move_file("a.txt", "b.txt")   delete_file("b.txt")   delete_folder("out")
+r = run("git status")   r.output   r.ok   run(["git", "add", "."])   run("sort", input="b\na")
 ```
 
 ---
 
-## 44. Common errors and what they mean
+## 48. Common errors and what they mean
 
 | Message | What's wrong | Fix |
 |---|---|---|
@@ -2564,3 +2873,15 @@ eza build game.eza                     # in the terminal: dist/game/game.exe
 | `can't read "..." as a date` | `date(...)` got text in another format | write it like `"2026-10-04"` or `"2026-10-04 18:30"` |
 | `"..." isn't a valid pattern` | a mistake in a `.matches` / `.find_all` pattern | check the brackets; repeat counts need `{{3}}` |
 | `there's no record like that to update` | `.update` found nothing | check the id or pattern, e.g. with `.find` first |
+| `X has no method '.y'` | calling a function the type doesn't have | check spelling, and that the `define` is indented inside the `data` block |
+| `X.y needs 1 argument(s)` | used a function that takes arguments without `()` | write `x.y(...)` with its arguments |
+| `there's no data type called 'X' to build Y from` | `data Y from X`, but X doesn't exist (yet) | check spelling, and declare X above Y |
+| `the module m has no 'x'` | a typo, or the module doesn't create that name | check spelling; the message suggests the closest name |
+| `'_x' is private to the module m` | names starting with `_` stay inside their file | rename it without the `_`, or add a function that gives it back |
+| `a module's variables can only be changed by its own code` | `change module.x to ...` from another file | add a function to the module that changes it |
+| `"x.eza" is already being loaded - two modules can't use each other` | a.eza uses b.eza, and b.eza uses a.eza | move what they share into a third file |
+| `can't use "x.eza"` / `can't find the module file` | the module file isn't there | check the path; it's relative to the file with the `use` line |
+| `can't start "..."` | `run` couldn't find the program | check it's installed and spelled right |
+| `there's no file "..." to delete` | a path is wrong | check it with `exists()` first |
+| `"..." is a folder - use delete_folder for folders` | `delete_file` on a folder | use `delete_folder` |
+| `delete_folder won't delete "..."` | it's your script's folder, your home folder or a drive | delete something more specific |

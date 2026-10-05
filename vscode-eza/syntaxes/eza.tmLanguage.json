@@ -35,7 +35,7 @@
           "captures": { "1": { "name": "storage.type.function.eza" }, "2": { "name": "entity.name.function.eza" } }
         },
         {
-          "match": "\\b(data)\\s+([A-Za-z_]\\w*)",
+          "match": "\\b(data|class)\\s+([A-Za-z_]\\w*)",
           "captures": { "1": { "name": "storage.type.class.eza" }, "2": { "name": "entity.name.type.eza" } }
         },
         {
@@ -46,14 +46,15 @@
     },
     "keyword": {
       "patterns": [
-        { "match": "\\b(if|then|else|each|in|while|return|break|continue|attempt|handle|on|persist|for|until|mimic|tick|tween|over|ease|include|spawn|destroy|wait|at|seconds?|push|pop|load|save|append|test|expect|play|stop|emit|go)\\b", "name": "keyword.control.eza" },
+        { "match": "\\b(if|then|else|each|in|while|return|break|continue|attempt|handle|on|persist|for|until|mimic|tick|tween|over|ease|include|use|as|spawn|destroy|wait|at|seconds?|push|pop|load|save|append|test|expect|play|stop|emit|go)\\b", "name": "keyword.control.eza" },
         { "match": "\\b(rewind|change|to|by|beginning|steps?)\\b", "name": "keyword.other.eza" },
-        { "match": "\\b(define|data|param|scene|gui|prefab|stage|style|particles)\\b", "name": "storage.type.eza" },
+        { "match": "\\b(define|data|class|from|param|scene|gui|prefab|stage|style|particles)\\b", "name": "storage.type.eza" },
+        { "match": "\\b(self|super)\\b", "name": "variable.language.eza" },
         { "match": "\\b(and|or|not)\\b", "name": "keyword.operator.logical.eza" },
         { "match": "->|==|!=|<=|>=|<<|>>|[+\\-*/%<>=&|^~]", "name": "keyword.operator.eza" }
       ]
     },
-    "constant": { "match": "\\b(true|false|none|pi)\\b", "name": "constant.language.eza" },
+    "constant": { "match": "\\b(true|false|none|pi|args)\\b", "name": "constant.language.eza" },
     "property-assign": { "match": "\\b[A-Za-z_]\\w*(?==[^=])", "name": "variable.parameter.eza" },
     "method": { "match": "(?<=\\.)[A-Za-z_]\\w*", "name": "support.function.method.eza" },
     "call": { "match": "\\b[A-Za-z_]\\w*(?=\\()", "name": "entity.name.function.call.eza" }

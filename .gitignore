@@ -1,0 +1,12 @@
+# build output (rebuilt by cargo; many GB)
+target/
+dist/
+
+# the ready-to-run program goes on the Releases page, not in the repo
+*.exe
+*.zip
+
+# files the examples write while they run
+examples/output/
+*.db
+tempCodeRunnerFile.eza
