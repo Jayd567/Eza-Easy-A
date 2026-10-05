@@ -159,6 +159,15 @@ pub fn block_has_wait(b: &[Stmt]) -> bool {
     })
 }
 
+/// page "/hello/{name}" method="POST" then ...   (inside `serve`)
+#[derive(Debug, Clone)]
+pub struct PageDecl {
+    pub path: String,
+    pub props: Vec<(String, Expr)>,
+    pub body: Rc<Vec<Stmt>>,
+    pub line: usize,
+}
+
 /// `data Boss from Enemy` (or `class`): fields with defaults, plus functions that work on `self`.
 #[derive(Debug)]
 pub struct DataDecl {
@@ -249,6 +258,8 @@ pub enum StmtKind {
     Use { path: String, alias: String },
     /// x, y = position (create: true)   /   change x, y to [y, x] (create: false)
     Unpack { names: Vec<String>, value: Expr, create: bool },
+    /// serve port=8080 folder="public"  +  indented `page "/path"` blocks
+    Serve { props: Vec<(String, Expr)>, pages: Vec<PageDecl> },
 }
 
 impl Expr {

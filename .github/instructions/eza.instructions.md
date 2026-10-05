@@ -159,6 +159,33 @@ gui window "hud" x=16 y=16
     button "Pause" then change paused to true
 ```
 
+## Terminal output, terminal apps and websites
+
+```eza
+print("Saved!", color="green", bold=true)       # styles: color, background, bold, italic, underline, dim
+print(table(people))                             # list of dictionaries -> a text table
+print(panel("Done", title="Backup"))
+each f in progress(names, "Working")             # a progress bar as the loop runs
+    print(f)
+level = input("Pick one", choices=["Easy", "Hard"])   # arrow-key menu; hidden=true for passwords
+page_html = """
+    <h1>Hello {name}</h1>
+    """                                          # text over several lines; { followed by a space is a plain brace
+
+gui window "app" terminal=true centered=true title="My app"   # the same gui, drawn in the terminal
+    text "Count: {count}"                        # {values} in labels update by themselves
+    button "Add one" then change count by 1
+    button "Quit" then quit
+
+serve port=8000 folder="public"                  # web server; open http://localhost:8000
+    page "/" then return "<h1>Hi</h1>"           # text starting with < is HTML
+    page "/api/scores" then return scores        # lists and dictionaries go out as JSON
+    page "/hello/{who}" then return "Hi {who}"   # {who} is text
+    page "/add" method="POST"
+        scores.add(request.data)                 # request: method, path, query, form, data, body, headers
+        change response.status to 201            # response: status, type, headers
+```
+
 `a.touches(b)` checks overlap right now (inside `if`). `raycast(from=p, direction=[1, 0], distance=200)`. `play "coin.wav"`, `emit 30 from sparks at hero.position`, `go to "level2"`, `rewind hero by 60 steps`.
 
 ## Before finishing

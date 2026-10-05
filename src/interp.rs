@@ -608,6 +608,10 @@ pub struct Interp {
     pub bursts: Vec<(String, usize, Option<Vec<f64>>)>,
     /// set by `go to "file"`: the script to switch to
     pub go_to: Option<PathBuf>,
+    /// set by `quit`: the program should end
+    pub quitting: bool,
+    /// `serve` blocks: the web server to start once the script's top level has run
+    pub server: Option<crate::server::ServerDef>,
     /// objects made by `spawn`, keyed by id (the engine draws the live ones)
     pub entities: std::collections::BTreeMap<u64, DynEntity>,
     next_entity: u64,
@@ -678,6 +682,8 @@ impl Interp {
             errors: vec![],
             bursts: vec![],
             go_to: None,
+            quitting: false,
+            server: None,
             entities: std::collections::BTreeMap::new(),
             next_entity: 1,
             image_cache: HashMap::new(),
@@ -883,6 +889,36 @@ impl Interp {
                 scope.insert(name, self.new_var(v));
             }
             StmtKind::Change(t, mode, e) => self.change(t, *mode, e, scope)?,
+            StmtKind::Serve { props, pages } => {
+                let mut def = self.server.take().unwrap_or(crate::server::ServerDef { port: 8000, folder: None, share: false, pages: vec![] });
+                for (k, e) in props {
+                    let v = self.eval(e, scope)?;
+                    match (k.as_str(), &v) {
+                        ("port", Value::Num(n)) if *n >= 1.0 && *n <= 65535.0 && n.fract() == 0.0 => def.port = *n as u16,
+                        ("port", _) => return self.rt(format!("port= needs a whole number from 1 to 65535, like 8000 (got {})", v.repr())),
+                        ("folder", Value::Str(f)) => {
+                            let dir = self.resolve_path(f);
+                            if !dir.is_dir() {
+                                return self.rt(format!("folder=\"{}\" isn't a folder next to this script", f));
+                            }
+                            def.folder = Some(dir);
+                        }
+                        ("share", _) => def.share = v.truthy(),
+                        _ => return self.rt(format!("serve doesn't have a setting called '{}' (it has: port, folder, share)", k)),
+                    }
+                }
+                for p in pages {
+                    let mut method = "GET".to_string();
+                    for (k, e) in &p.props {
+                        match k.as_str() {
+                            "method" => method = self.eval(e, scope)?.display().to_uppercase(),
+                            _ => return self.rt(format!("page doesn't have a setting called '{}' (it has: method)", k)),
+                        }
+                    }
+                    def.pages.push(crate::server::Page { method, path: p.path.clone(), body: p.body.clone(), scope: scope.clone(), file: self.cur_file });
+                }
+                self.server = Some(def);
+            }
             StmtKind::Unpack { names, value, create } => {
                 let v = deref_val(self.eval(value, scope)?);
                 let items = self.unpack(&v, names)?;
@@ -950,7 +986,16 @@ impl Interp {
                 let src = self.eval(e, scope)?;
                 // `each fruit in fruits` + `change fruit to ...` updates the list itself
                 let writeback = matches!(src, Value::List(_)) && matches!(e, Expr::Ident(_) | Expr::Field(..) | Expr::Index(..));
+                // each x in progress(list): a progress bar that moves as the loop goes
+                let bar = match &src {
+                    Value::Obj(o) if o.type_name == "progress" => Some(o.get("label").map(|l| l.display()).unwrap_or_default()),
+                    _ => None,
+                };
                 let items: Vec<Value> = match src {
+                    Value::Obj(o) if o.type_name == "progress" => match o.get("items") {
+                        Some(Value::List(l)) => (**l).clone(),
+                        _ => vec![],
+                    },
                     Value::List(l) => (*l).clone(),
                     Value::Num(n) => (0..n.max(0.0) as i64).map(|i| Value::Num(i as f64)).collect(),
                     Value::Str(s) => s.chars().map(|c| Value::Str(c.to_string())).collect(),
@@ -966,6 +1011,10 @@ impl Interp {
                 let fresh_each_time = declares(body);
                 let mut reuse: Option<(Rc<Scope>, VarRef)> = None;
                 let name: Rc<str> = Rc::from(name.as_str());
+                let total = items.len();
+                if let Some(label) = &bar {
+                    crate::term::draw_progress(label, 0, total);
+                }
                 // for explaining errors: `enemy` is enemies[i]
                 let source = if writeback {
                     self.place_of(e, scope).map(|(var, path, _)| Rc::new(Source { var, name: crate::diagnose::code(e), path }))
@@ -999,6 +1048,9 @@ impl Interp {
                         lv.borrow_mut().source = Some((src.clone(), Some(i)));
                     }
                     let r = self.exec_block(body, &sc);
+                    if let Some(label) = &bar {
+                        crate::term::draw_progress(label, i + 1, total);
+                    }
                     if !fresh_each_time {
                         reuse = Some((sc, lv.clone()));
                     }
@@ -2048,6 +2100,7 @@ impl Interp {
                         StmtKind::Each(name, e, body) if block_has_wait(body) => {
                             let items: Vec<Value> = match self.eval(e, &scope)? {
                                 src if name.contains(',') => self.each_items(src, true)?,
+                                src @ Value::Obj(_) if matches!(&src, Value::Obj(o) if o.type_name == "progress") => self.each_items(src, false)?,
                                 Value::List(l) => (*l).clone(),
                                 Value::Num(n) => (0..n.max(0.0) as i64).map(|i| Value::Num(i as f64)).collect(),
                                 Value::Str(s) => s.chars().map(|c| Value::Str(c.to_string())).collect(),
@@ -2317,6 +2370,9 @@ impl Interp {
             match it.run_source(&src, &name) {
                 Ok(()) => return Ok(it),
                 Err(e) if e.is_switch() => {
+                    if it.quitting {
+                        return Ok(it);
+                    }
                     path = it.go_to.take().unwrap_or(path);
                     prev = Some(it);
                 }
@@ -2516,6 +2572,30 @@ impl Interp {
         Ok(())
     }
 
+    /// Runs one `page` block of `serve`: gives what it returned and the `response` it may have changed.
+    pub fn run_page(&mut self, i: usize, request: Value, params: Vec<(String, Value)>) -> R<(Value, Value)> {
+        let Some(page) = self.server.as_ref().and_then(|s| s.pages.get(i)).cloned() else { return Ok((Value::None, Value::None)) };
+        let sc = Scope::new(Some(page.scope.clone()));
+        sc.insert("request", self.new_var(request));
+        let mut resp = Obj::new("response");
+        resp.set("status", Value::Num(200.0));
+        resp.set("type", Value::Str(String::new()));
+        resp.set("headers", Value::obj(Obj::new("dict")));
+        sc.insert("response", self.new_var(Value::obj(resp)));
+        for (k, v) in params {
+            sc.insert(&k, self.new_var(v));
+        }
+        let outer = std::mem::replace(&mut self.cur_file, page.file);
+        let r = self.exec_block(&page.body, &sc);
+        self.cur_file = outer;
+        let v = match r.map_err(|e| e.in_file(self.file_name(page.file)))? {
+            Flow::Return(v) => v,
+            _ => Value::None,
+        };
+        let resp = sc.value_of("response").unwrap_or(Value::None);
+        Ok((v, resp))
+    }
+
     /// `a, b = value`: the parts, one per name.
     fn unpack(&self, v: &Value, names: &[String]) -> R<Vec<Value>> {
         let what = names.join(", ");
@@ -2537,6 +2617,10 @@ impl Interp {
             Value::List(l) => (*l).clone(),
             Value::Num(n) => (0..n.max(0.0) as i64).map(|i| Value::Num(i as f64)).collect(),
             Value::Str(s) => s.chars().map(|c| Value::Str(c.to_string())).collect(),
+            Value::Obj(o) if o.type_name == "progress" => match o.get("items") {
+                Some(Value::List(l)) => (**l).clone(),
+                _ => vec![],
+            },
             Value::Obj(o) if o.type_name == "dict" && pairs => {
                 o.fields.iter().map(|(k, v)| Value::list(vec![Value::Str(k.clone()), v.clone()])).collect()
             }

@@ -58,6 +58,13 @@ fn names_in_stmts(stmts: &[Stmt], out: &mut HashSet<String>) {
         match &s.kind {
             StmtKind::Assign(_, x) | StmtKind::Expr(x) | StmtKind::Destroy(x) | StmtKind::Expect(x) | StmtKind::Param(_, x) | StmtKind::Go(x) => e(x),
             StmtKind::Unpack { value, .. } => e(value),
+            StmtKind::Serve { props, pages } => {
+                props.iter().for_each(|(_, x)| names_in_expr(x, out));
+                for p in pages {
+                    p.props.iter().for_each(|(_, x)| names_in_expr(x, out));
+                    names_in_stmts(&p.body, out);
+                }
+            }
             StmtKind::Change(a, _, b) | StmtKind::Push(a, b) => {
                 e(a);
                 e(b);
@@ -364,6 +371,15 @@ impl Ctx {
                     self.plain.insert(n.clone());
                 }
             }
+            StmtKind::Serve { pages, .. } => {
+                for p in pages {
+                    for n in ["request".to_string(), "response".to_string()].into_iter().chain(crate::server::path_params(&p.path)) {
+                        self.names.insert(n.clone());
+                        self.binders.insert(n);
+                    }
+                    self.collect(&p.body);
+                }
+            }
             StmtKind::If(arms, els) => {
                 for (_, b) in arms {
                     self.collect(b);
@@ -580,6 +596,15 @@ impl Ctx {
                 self.check_expr(e, line);
                 let names: Vec<String> = each_names(v).into_iter().map(String::from).collect();
                 self.check_block(b, &names);
+            }
+            StmtKind::Serve { props, pages } => {
+                props.iter().for_each(|(_, e)| self.check_expr(e, line));
+                for p in pages {
+                    p.props.iter().for_each(|(_, e)| self.check_expr(e, p.line));
+                    let mut known = vec!["request".to_string(), "response".to_string()];
+                    known.extend(crate::server::path_params(&p.path));
+                    self.check_block(&p.body, &known);
+                }
             }
             StmtKind::Unpack { names, value, create } => {
                 self.check_expr(value, line);

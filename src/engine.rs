@@ -37,6 +37,8 @@ struct GuiState {
 
 struct Runtime {
     it: Interp,
+    /// `serve` in a script with a window: the web server answers between frames
+    server: Option<crate::server::Server>,
     failed: bool,
     /// last drawn value of each gui window, the UI entity, and the window size it was drawn for
     gui: HashMap<String, GuiState>,
@@ -117,8 +119,19 @@ impl Drop for Runtime {
 
 impl Runtime {
     fn new(it: Interp) -> Self {
+        let server = match it.server.clone() {
+            Some(def) => match crate::server::Server::start(def) {
+                Ok(s) => Some(s),
+                Err(msg) => {
+                    eprintln!("[Runtime Error] {}", msg);
+                    None
+                }
+            },
+            None => None,
+        };
         Runtime {
             it,
+            server,
             failed: false,
             gui: HashMap::new(),
             textures: HashMap::new(),
@@ -201,6 +214,7 @@ pub fn play(path: &str) -> i32 {
         return 2;
     }
     let it = match Interp::start(Path::new(path), None, true) {
+        Ok(it) if it.quitting => return 0,
         Ok(it) => it,
         Err(e) => {
             eprintln!("{}", e);
@@ -637,6 +651,11 @@ fn scene_switch(
     mut windows: Query<&mut Window>,
     mut exit: EventWriter<AppExit>,
 ) {
+    // `quit` closes the window
+    if rt.it.quitting {
+        exit.send(AppExit::Success);
+        return;
+    }
     let Some(next) = rt.it.go_to.take() else { return };
     for e in &things {
         commands.entity(e).despawn_recursive();
@@ -783,6 +802,12 @@ fn step(
         }
         rt.it.set_gui_field("screen", &[], "width", Value::Num(w.width() as f64));
         rt.it.set_gui_field("screen", &[], "height", Value::Num(w.height() as f64));
+    }
+    {
+        let rt = &mut *rt;
+        if let Some(s) = &rt.server {
+            s.poll(&mut rt.it, std::time::Duration::ZERO);
+        }
     }
     let r = rt.it.tick();
     // errors in `on` blocks: those blocks are switched off and the game carries on

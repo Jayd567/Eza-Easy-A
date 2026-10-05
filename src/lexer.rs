@@ -47,6 +47,18 @@ fn color_end(c: &[char], i: usize) -> Option<usize> {
     }
 }
 
+/// Multi-line text: drops the line break right after the opening """ and the one before the
+/// closing """, and the indentation every line shares, so the text can be indented with the code.
+fn dedent(s: &str) -> String {
+    let s = s.strip_prefix('\n').unwrap_or(s);
+    let s = match s.rfind('\n') {
+        Some(k) if s[k + 1..].trim().is_empty() => &s[..k],
+        _ => s,
+    };
+    let shared = s.lines().filter(|l| !l.trim().is_empty()).map(|l| l.len() - l.trim_start().len()).min().unwrap_or(0);
+    s.lines().map(|l| if l.len() >= shared { &l[shared..] } else { l.trim_start() }).collect::<Vec<_>>().join("\n")
+}
+
 /// Words after which a value comes next, so a `#` there is a color, not a comment.
 const VALUE_WORDS: &[&str] = &["to", "by", "in", "at", "and", "or", "not", "then", "else", "with", "return", "if", "while", "until", "push", "expect", "print", "from", "into"];
 
@@ -172,6 +184,37 @@ pub fn lex(src: &str) -> R<Vec<Token>> {
                 let text: String = c[s..i].iter().filter(|ch| **ch != '_').collect();
                 push!(Tok::Num(text.parse().unwrap()));
             }
+            // """ text over several lines """ (the indentation they share is taken off)
+            '"' if i + 2 < n && c[i + 1] == '"' && c[i + 2] == '"' => {
+                let first_line = line;
+                i += 3;
+                let mut s = String::new();
+                loop {
+                    if i + 2 >= n {
+                        return Err(err_at(first_line, start.saturating_sub(line_start), start.saturating_sub(line_start) + 3, "this text started with \"\"\" but never ends - close it with \"\"\""));
+                    }
+                    if c[i] == '"' && c[i + 1] == '"' && c[i + 2] == '"' {
+                        i += 3;
+                        break;
+                    }
+                    if c[i] == '\n' {
+                        line += 1;
+                        line_start = i + 1;
+                    }
+                    if c[i] == '\\' && i + 1 < n {
+                        i += 1;
+                        s.push(match c[i] {
+                            'n' => '\n',
+                            't' => '\t',
+                            other => other,
+                        });
+                    } else if c[i] != '\r' {
+                        s.push(c[i]);
+                    }
+                    i += 1;
+                }
+                toks.push(Token { tok: Tok::Str(dedent(&s)), line: first_line, col: 0, end: 0 });
+            }
             // straight quotes plus the “smart quotes” word processors insert
             '"' | '\'' | '\u{201C}' | '\u{201D}' | '\u{2018}' => {
                 let closers: &[char] = match ch {
@@ -185,6 +228,45 @@ pub fn lex(src: &str) -> R<Vec<Token>> {
                 loop {
                     if i >= n || c[i] == '\n' {
                         return Err(err_at(line, start - line_start, i - line_start, "text is missing its closing quote"));
+                    }
+                    // "{{" is a literal brace; keep both for the text filler
+                    if c[i] == '{' && i + 1 < n && c[i + 1] == '{' {
+                        s.push_str("{{");
+                        i += 2;
+                        continue;
+                    }
+                    // inside {code}, quotes belong to the code: "Hi {name.get("first", "you")}"
+                    if c[i] == '{' && i + 1 < n && !c[i + 1].is_whitespace() {
+                        let mut depth = 0;
+                        while i < n && c[i] != '\n' {
+                            let ch = c[i];
+                            s.push(ch);
+                            i += 1;
+                            match ch {
+                                '{' => depth += 1,
+                                '}' => {
+                                    depth -= 1;
+                                    if depth == 0 {
+                                        break;
+                                    }
+                                }
+                                '"' | '\'' => {
+                                    while i < n && c[i] != ch && c[i] != '\n' {
+                                        s.push(c[i]);
+                                        i += 1;
+                                    }
+                                    if i < n && c[i] == ch {
+                                        s.push(ch);
+                                        i += 1;
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                        if depth != 0 {
+                            return Err(err_at(line, start - line_start, i - line_start, "text has a '{' without a matching '}' (use {{ for a literal brace)"));
+                        }
+                        continue;
                     }
                     if closers.contains(&c[i]) {
                         i += 1;
@@ -261,5 +343,14 @@ mod tests {
         assert_eq!(colors("x = 5 #bad idea\n"), 0);
         assert_eq!(colors("#face\n"), 0);
         assert_eq!(colors("c = #FF0000\nchange c to #fff\nl = [#000, #111]\n"), 4);
+    }
+
+    #[test]
+    fn text_over_several_lines() {
+        let toks = lex("x = \"\"\"\n    <h1>Hi</h1>\n      <p>indented</p>\n    \"\"\"\ny = 1\n").unwrap();
+        let text = toks.iter().find_map(|t| if let Tok::Str(s) = &t.tok { Some(s.clone()) } else { None }).unwrap();
+        assert_eq!(text, "<h1>Hi</h1>\n  <p>indented</p>");
+        // the line after the text knows its own line number
+        assert!(toks.iter().any(|t| matches!(&t.tok, Tok::Ident(n) if n == "y") && t.line == 5));
     }
 }

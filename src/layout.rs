@@ -248,6 +248,14 @@ fn to_value(ui: &Ui) -> Value {
     o.set("width", Value::Num(ui.rect[2]));
     o.set("height", Value::Num(ui.rect[3]));
     o.set("clipped", Value::Bool(ui.clipped));
+    // which sizes the script chose itself (terminal apps lay things out again in letters and lines)
+    let (ew, eh) = ui.explicit();
+    if ew.is_some() {
+        o.set("fixed_width", Value::Bool(true));
+    }
+    if eh.is_some() {
+        o.set("fixed_height", Value::Bool(true));
+    }
     if o.get("visible").is_none() {
         o.set("visible", Value::Bool(true));
     }

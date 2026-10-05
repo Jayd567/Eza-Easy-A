@@ -109,6 +109,12 @@ fn interpolate(s: String, line: usize) -> R<Expr> {
             i += 2;
             continue;
         }
+        // `{` then a space or line break is just a brace (CSS and JavaScript in web pages: body { margin: 0 })
+        if c[i] == '{' && next.map_or(true, |n| n.is_whitespace()) {
+            lit.push('{');
+            i += 1;
+            continue;
+        }
         if c[i] == '{' {
             let mut depth = 0;
             let mut j = i;
@@ -471,18 +477,10 @@ impl Parser {
                 StmtKind::On(e, Rc::new(self.block()?))
             }
             "match" if !self.peek1_sym("=") && !self.peek1_sym("(") && !self.peek1_sym(".") => self.match_stmt(line)?,
+            "serve" if is_decl => self.serve_stmt()?,
             _ if self.unpack_ahead("=").is_some() => {
                 let names = self.unpack_names("=")?;
                 StmtKind::Unpack { names, value: self.expr()?, create: true }
-            }
-            // print "hi", score   (brackets are optional: print("hi") works too)
-            "print" if !self.peek1_sym("(") && !self.peek1_sym("=") && !self.peek1_sym(".") && !matches!(self.peek_n(1), Tok::Newline | Tok::Eof | Tok::Dedent) => {
-                self.next();
-                let mut args = vec![Arg { name: None, value: self.expr()? }];
-                while self.eat_sym(",") {
-                    args.push(Arg { name: None, value: self.expr()? });
-                }
-                StmtKind::Expr(Expr::Call(Box::new(Expr::Ident("print".into())), args))
             }
             "trigger" if matches!(self.peek_n(1), Tok::Str(_)) => {
                 self.next();
@@ -612,6 +610,20 @@ impl Parser {
     fn simple(&mut self) -> R<StmtKind> {
         let kw = if let Tok::Ident(s) = self.peek() { s.clone() } else { String::new() };
         Ok(match kw.as_str() {
+            // quit: end the program (the script, its window, web server or terminal app)
+            "quit" if matches!(self.peek_n(1), Tok::Newline | Tok::Eof | Tok::Dedent) => {
+                self.next();
+                StmtKind::Expr(Expr::Call(Box::new(Expr::Ident("quit".into())), vec![]))
+            }
+            // print "hi", score   (brackets are optional: print("hi") works too)
+            "print" if !self.peek1_sym("(") && !self.peek1_sym("=") && !self.peek1_sym(".") && !matches!(self.peek_n(1), Tok::Newline | Tok::Eof | Tok::Dedent) => {
+                self.next();
+                let mut args = vec![Arg { name: None, value: self.expr()? }];
+                while self.eat_sym(",") {
+                    args.push(Arg { name: None, value: self.expr()? });
+                }
+                StmtKind::Expr(Expr::Call(Box::new(Expr::Ident("print".into())), args))
+            }
             "change" if !self.peek1_sym("=") => {
                 self.next();
                 // change a, b to [b, a]
@@ -1167,6 +1179,57 @@ impl Parser {
         }
         Ok((names, defaults))
     }
+    /// serve port=8080 folder="public"
+    ///     page "/" then return "<h1>Hi</h1>"
+    ///     page "/hello/{name}" method="POST"
+    ///         ...
+    fn serve_stmt(&mut self) -> R<StmtKind> {
+        self.next();
+        let mut props = vec![];
+        while matches!(self.peek(), Tok::Ident(_)) && self.peek1_sym("=") {
+            let k = self.ident()?;
+            self.next();
+            props.push((k, self.prop_value()?));
+        }
+        let mut pages = vec![];
+        if matches!(self.peek(), Tok::Newline) && matches!(self.peek_n(1), Tok::Indent) {
+            self.next();
+            self.next();
+            while !matches!(self.peek(), Tok::Dedent | Tok::Eof) {
+                if matches!(self.peek(), Tok::Newline) {
+                    self.next();
+                    continue;
+                }
+                let line = self.line();
+                if !self.eat_kw("page") {
+                    return self.err(format!("inside serve, each line is a page, like:   page \"/\" then return \"Hello\"   (found {})", describe(self.peek())));
+                }
+                let path = match self.next() {
+                    Tok::Str(s) => s,
+                    t => return self.err_prev(format!("page needs its address in quotes, like  page \"/scores\"  (found {})", describe(&t))),
+                };
+                if !path.starts_with('/') {
+                    return self.err_prev(format!("a page address starts with /, like \"/{}\"", path));
+                }
+                let mut pprops = vec![];
+                while matches!(self.peek(), Tok::Ident(_)) && self.peek1_sym("=") {
+                    let k = self.ident()?;
+                    self.next();
+                    pprops.push((k, self.prop_value()?));
+                }
+                let body = self.block()?;
+                if block_has_wait(&body) {
+                    return Err(EzaError::syntax(line, "a page can't use wait - it has to answer the browser right away"));
+                }
+                pages.push(PageDecl { path, props: pprops, body: Rc::new(body), line });
+            }
+            self.eat_dedent();
+        } else {
+            self.end_line()?;
+        }
+        Ok(StmtKind::Serve { props, pages })
+    }
+
     /// match weapon
     ///     "sword" then ...
     ///     "bow", "crossbow" then ...

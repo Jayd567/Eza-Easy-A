@@ -8,7 +8,8 @@ pub const BUILTINS: &[&str] = &[
     "print", "len", "str", "num", "int", "range", "random", "random_int", "input", "type", "sin", "cos", "tan", "asin",
     "acos", "atan", "atan2", "radians", "degrees", "distance", "lerp", "chr", "ord", "stack", "queue", "exists", "raycast",
     "now", "today", "date", "fetch", "database", "files", "folders", "find_files", "file_info", "is_folder", "make_folder",
-    "copy_file", "move_file", "delete_file", "delete_folder", "run", "find_path",
+    "copy_file", "move_file", "delete_file", "delete_folder", "run", "find_path", "table", "panel", "progress", "clear",
+    "quit",
 ];
 
 /// A number or a list of numbers, as a vector.
@@ -60,6 +61,65 @@ pub fn builtin(it: &mut Interp, name: &str, args: Vec<Value>, named: Vec<(String
     }
     if name == "run" {
         return crate::tools::run_program(it, &args, &named);
+    }
+    // nicer terminal output (src/term.rs)
+    match name {
+        "print" if !named.is_empty() => {
+            let text = args.iter().map(|a| a.display()).collect::<Vec<_>>().join(" ");
+            println!("{}", crate::term::styled(it.line, &text, &named)?);
+            return Ok(Value::None);
+        }
+        "input" if !named.is_empty() => {
+            let prompt = args.first().map(|p| p.display()).unwrap_or_default();
+            for (k, _) in &named {
+                if k != "choices" && k != "hidden" {
+                    return err(it, format!("input doesn't have a setting called '{}' (it has: choices, hidden)", k));
+                }
+            }
+            if let Some((_, c)) = named.iter().find(|(k, _)| k == "choices") {
+                let items = match crate::interp::deref_val(c.clone()) {
+                    Value::List(l) => (*l).clone(),
+                    other => return err(it, format!("choices= needs a list of things to pick from, got {}", other.type_name())),
+                };
+                return crate::term::choose(it.line, &prompt, &items);
+            }
+            return Ok(Value::Str(crate::term::hidden(&prompt)));
+        }
+        "table" => {
+            let header = named.iter().find(|(k, _)| k == "header").map(|(_, v)| v.clone());
+            if let Some((k, _)) = named.iter().find(|(k, _)| k != "header") {
+                return err(it, format!("table doesn't have a setting called '{}' (it has: header)", k));
+            }
+            return Ok(Value::Str(crate::term::table(it.line, arg(it, &args, 0, name)?, header.as_ref())?));
+        }
+        "panel" => {
+            let title = named.iter().find(|(k, _)| k == "title").map(|(_, v)| v.display()).or_else(|| args.get(1).map(|v| v.display()));
+            let text = args.first().map(|v| v.display()).unwrap_or_default();
+            return Ok(Value::Str(crate::term::panel(&text, title.as_deref())));
+        }
+        "progress" => {
+            // each file in progress(files, "Copying"): the loop draws a progress bar as it goes
+            let items = match crate::interp::deref_val(arg(it, &args, 0, name)?.clone()) {
+                Value::List(l) => (*l).clone(),
+                Value::Num(n) => (0..n.max(0.0) as i64).map(|i| Value::Num(i as f64)).collect(),
+                other => return err(it, format!("progress needs a list (or a number) to go through, got {}", other.type_name())),
+            };
+            let label = named.iter().find(|(k, _)| k == "label").map(|(_, v)| v.display()).or_else(|| args.get(1).map(|v| v.display()));
+            let mut o = Obj::new("progress");
+            o.set("items", Value::list(items));
+            o.set("label", Value::Str(label.unwrap_or_default()));
+            return Ok(Value::obj(o));
+        }
+        "clear" => {
+            crate::term::clear();
+            return Ok(Value::None);
+        }
+        "quit" => {
+            // ends the program: the script, the window, the web server or the terminal app
+            it.quitting = true;
+            return Err(EzaError::switch(it.line));
+        }
+        _ => {}
     }
     if let Some((k, _)) = named.first() {
         return err(it, format!("{}() doesn't take named arguments like '{}='", name, k));

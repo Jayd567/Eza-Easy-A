@@ -407,5 +407,48 @@
       "\t$0"
     ],
     "description": "loop over a dictionary's keys and values"
+  },
+  "serve": {
+    "prefix": "serve",
+    "body": [
+      "serve port=${1:8000}",
+      "\tpage \"/\" then return \"<h1>${2:Hello from Eza}</h1>\"",
+      "\tpage \"/api/${3:items}\" then return ${4:items}",
+      "$0"
+    ],
+    "description": "a web server with pages"
+  },
+  "page": {
+    "prefix": "page",
+    "body": [
+      "page \"/${1:path}\"${2: method=\"POST\"}",
+      "\t$0"
+    ],
+    "description": "a page of a serve web server"
+  },
+  "terminal app": {
+    "prefix": "tui",
+    "body": [
+      "gui window \"${1:app}\" terminal=true centered=true title=\"${2:My app}\"",
+      "\ttext \"${3:Hello}\"",
+      "\tbutton \"Quit\" then quit"
+    ],
+    "description": "a gui drawn in the terminal"
+  },
+  "table": {
+    "prefix": "table",
+    "body": [
+      "print(table(${1:rows}))"
+    ],
+    "description": "print a list as a table"
+  },
+  "multi-line text": {
+    "prefix": "\"\"\"",
+    "body": [
+      "\"\"\"",
+      "$0",
+      "\"\"\""
+    ],
+    "description": "text over several lines"
   }
 }

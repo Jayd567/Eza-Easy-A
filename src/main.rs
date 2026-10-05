@@ -14,6 +14,9 @@ mod suggest;
 mod tools;
 mod two_d;
 mod types;
+mod term;
+mod server;
+mod tui;
 mod physics;
 mod value;
 
@@ -266,7 +269,9 @@ fn file_has_scene(path: &Path, seen: &mut HashSet<PathBuf>) -> bool {
 fn contains_scene(stmts: &[ast::Stmt], dir: &Path, seen: &mut HashSet<PathBuf>) -> bool {
     use ast::StmtKind as K;
     stmts.iter().any(|s| match &s.kind {
-        K::Scene(_) | K::Stage(_) | K::Gui(_) => true,
+        K::Scene(_) | K::Stage(_) => true,
+        // a gui with terminal=true is drawn in the terminal, not in a window
+        K::Gui(n) => !n.props.iter().any(|(k, v)| k == "terminal" && matches!(v, ast::Expr::Bool(true))),
         K::Include(f) => file_has_scene(&dir.join(f), seen),
         K::Use { path, .. } => {
             let mut p = dir.join(path);
@@ -403,11 +408,29 @@ pub fn indent(text: &str, n: usize) -> String {
     text.lines().map(|l| format!("{}{}", pad, l)).collect::<Vec<_>>().join("\n")
 }
 
+/// Once the script's top level is done: a terminal app (gui ... terminal=true) and/or the web server keep running.
+fn after_script(it: &mut interp::Interp) -> i32 {
+    let terminal_app = !tui::terminal_roots(it).is_empty();
+    match (terminal_app, it.server.clone()) {
+        (false, None) => 0,
+        (false, Some(_)) => server::run(it),
+        (true, None) => tui::run(it, None),
+        (true, Some(def)) => match server::Server::start(def) {
+            Ok(s) => tui::run(it, Some(&s)),
+            Err(msg) => {
+                eprintln!("[Runtime Error] {}", msg);
+                1
+            }
+        },
+    }
+}
+
 fn run_file(path: &str) -> i32 {
     if read(path).is_none() {
         return 2;
     }
     match interp::Interp::start(Path::new(path), None, false) {
+        Ok(mut it) if !it.quitting => after_script(&mut it),
         Ok(_) => 0,
         Err(e) => {
             let text = e.to_string();

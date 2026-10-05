@@ -65,6 +65,8 @@ gui window "counter" centered=true gap=12
 | **Games** | 3D `scene`s and 2D `stage`s with sprites, sprite animations, tilemaps, physics, particles, sound, smooth `tween`s, `spawn`/`destroy` (with `Enemy.all` and `spawn ... into list`), `on hero touches coin`, your own events (`trigger "won"`), and pathfinding around walls |
 | **Menus and apps** | `gui` windows with buttons, text boxes, sliders, checkboxes, dropdowns, `style`s and charts |
 | **Everyday tools** | files and folders, CSV, JSON, `fetch` from the web, `database`, dates, running other programs, command-line `args` |
+| **Terminal tools** | colored `print`, `table(...)`, progress bars, arrow-key menus, and full terminal apps: any `gui` with `terminal=true` |
+| **Websites** | `serve` + `page "/hello/{name}" then return ...` for web pages and JSON services |
 | **Bigger programs** | functions with default values, classes (`data` with methods, `from`, `super`), `match`, ranges (`1 to 10`), `in`, `x, y = position`, modules (`use "file.eza"`), tests (`eza test`) |
 | **Time travel** | `rewind`, `persist` (changes that undo themselves), `mimic` (predict the future), and the F1 debugger |
 | **Help with mistakes** | Errors underline the exact spot, show the values involved and **how they got that way** (from the change history), and suggest a fix. Games pause on the frame it went wrong, so you can step back and watch. `eza check` finds mistakes before running, including the wrong kind of value (`score - "5"`, `name.uper()`, `goblin.nmae`) without you ever writing types, and VS Code shows them while you type; `eza explain E003` explains any error |

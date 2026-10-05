@@ -1,6 +1,6 @@
 # The Eza Beginner's Guide
 
-This guide covers every operation and piece of syntax in the Eza language, from your first `print` to 3D scenes, 2D games, physics, particles, sound, time travel and menus. Read it top to bottom the first time, then use the [cheat sheet](#47-cheat-sheet) at the end as a quick reference.
+This guide covers every operation and piece of syntax in the Eza language, from your first `print` to 3D scenes, 2D games, physics, particles, sound, time travel and menus. Read it top to bottom the first time, then use the [cheat sheet](#50-cheat-sheet) at the end as a quick reference.
 
 ## Contents
 
@@ -31,27 +31,30 @@ This guide covers every operation and piece of syntax in the Eza language, from 
 25. [Files and folders](#25-files-and-folders)
 26. [Running other programs: `run`](#26-running-other-programs-run)
 27. [Command-line arguments: `args`](#27-command-line-arguments-args)
-28. [Built-in functions](#28-built-in-functions)
-29. [Time: frames and `tick`](#29-time-frames-and-tick)
-30. [Reacting to things: `on`](#30-reacting-to-things-on)
-31. [Pausing: `wait`](#31-pausing-wait)
-32. [Temporary effects: `persist`](#32-temporary-effects-persist)
-33. [Smooth animation: `tween`](#33-smooth-animation-tween)
-34. [Time travel: `rewind`](#34-time-travel-rewind)
-35. [Predicting the future: `mimic`](#35-predicting-the-future-mimic)
-36. [3D worlds: `scene`](#36-3d-worlds-scene)
-37. [2D worlds: `stage`](#37-2d-worlds-stage)
-38. [Particles: sparks, smoke, snow](#38-particles-sparks-smoke-snow)
-39. [Templates and live objects: `prefab`, `spawn`, `destroy`](#39-templates-and-live-objects-prefab-spawn-destroy)
-40. [Sound and music: `play`, `stop`](#40-sound-and-music-play-stop)
-41. [Menus and HUDs: `gui`](#41-menus-and-huds-gui)
-42. [Styles: making menus look good](#42-styles-making-menus-look-good)
-43. [Charts](#43-charts)
-44. [Switching scripts: `go to`](#44-switching-scripts-go-to)
-45. [Finding and fixing mistakes](#45-finding-and-fixing-mistakes)
-46. [Sharing your program: `eza build`](#46-sharing-your-program-eza-build)
-47. [Cheat sheet](#47-cheat-sheet)
-48. [Common errors and what they mean](#48-common-errors-and-what-they-mean)
+28. [Nicer terminal output: colors, tables, menus](#28-nicer-terminal-output-colors-tables-menus)
+29. [Terminal apps: `gui` in the terminal](#29-terminal-apps-gui-in-the-terminal)
+30. [Websites and web services: `serve`](#30-websites-and-web-services-serve)
+31. [Built-in functions](#31-built-in-functions)
+32. [Time: frames and `tick`](#32-time-frames-and-tick)
+33. [Reacting to things: `on`](#33-reacting-to-things-on)
+34. [Pausing: `wait`](#34-pausing-wait)
+35. [Temporary effects: `persist`](#35-temporary-effects-persist)
+36. [Smooth animation: `tween`](#36-smooth-animation-tween)
+37. [Time travel: `rewind`](#37-time-travel-rewind)
+38. [Predicting the future: `mimic`](#38-predicting-the-future-mimic)
+39. [3D worlds: `scene`](#39-3d-worlds-scene)
+40. [2D worlds: `stage`](#40-2d-worlds-stage)
+41. [Particles: sparks, smoke, snow](#41-particles-sparks-smoke-snow)
+42. [Templates and live objects: `prefab`, `spawn`, `destroy`](#42-templates-and-live-objects-prefab-spawn-destroy)
+43. [Sound and music: `play`, `stop`](#43-sound-and-music-play-stop)
+44. [Menus and HUDs: `gui`](#44-menus-and-huds-gui)
+45. [Styles: making menus look good](#45-styles-making-menus-look-good)
+46. [Charts](#46-charts)
+47. [Switching scripts: `go to`](#47-switching-scripts-go-to)
+48. [Finding and fixing mistakes](#48-finding-and-fixing-mistakes)
+49. [Sharing your program: `eza build`](#49-sharing-your-program-eza-build)
+50. [Cheat sheet](#50-cheat-sheet)
+51. [Common errors and what they mean](#51-common-errors-and-what-they-mean)
 
 ---
 
@@ -65,10 +68,10 @@ Eza scripts are plain text files ending in `.eza`. Run them from a terminal:
 | `eza game.eza` | Runs a script. If it has a `scene`, `stage` or `gui`, a window opens |
 | `eza run game.eza` | Runs a script in the terminal only, never opens a window |
 | `eza tool.eza a b` | Runs a script and hands it `a` and `b` in [`args`](#27-command-line-arguments-args) |
-| `eza check game.eza` | Finds mistakes without running anything (prints `OK`). `eza check` on its own checks every file in the folder. See [finding mistakes](#45-finding-and-fixing-mistakes) |
+| `eza check game.eza` | Finds mistakes without running anything (prints `OK`). `eza check` on its own checks every file in the folder. See [finding mistakes](#48-finding-and-fixing-mistakes) |
 | `eza explain E003` | Explains an error code in detail (`eza explain` lists them all) |
 | `eza test` | Runs the `test` blocks in every `.eza` file in this folder (or `eza test game.eza`) |
-| `eza build game.eza` | Makes `dist/game/game.exe` to share. See [sharing](#46-sharing-your-program-eza-build) |
+| `eza build game.eza` | Makes `dist/game/game.exe` to share. See [sharing](#49-sharing-your-program-eza-build) |
 | `eza --version` | Shows the version (`-v` also works) |
 | `eza help` | Shows the list of commands (`--help` and `-h` also work) |
 
@@ -153,6 +156,14 @@ colors = [
     "green",
     "blue",
 ]
+```
+
+### Ending early: `quit`
+
+`quit` ends the program straight away, wherever it is: in the script, in a button's `then`, in a game, in a [terminal app](#29-terminal-apps-gui-in-the-terminal) or in a [web server](#30-websites-and-web-services-serve).
+
+```eza
+button "Quit" then quit
 ```
 
 ---
@@ -273,7 +284,7 @@ print(total)                  # 12
 
 ### Every change is remembered
 
-Each `change` is a step on a timeline, and Eza remembers the last 1000 steps of every variable. That's what powers [`rewind`](#34-time-travel-rewind).
+Each `change` is a step on a timeline, and Eza remembers the last 1000 steps of every variable. That's what powers [`rewind`](#37-time-travel-rewind).
 
 ---
 
@@ -416,7 +427,22 @@ print("Hello {name.upper}, you have {score} points, double is {score * 2}")
 # Hello EZA, you have 42 points, double is 84
 ```
 
-To write a real brace, double it: `"{{like this}}"` prints `{like this}`.
+To write a real brace, double it: `"{{like this}}"` prints `{like this}`. A `{` followed by a space or a line break is also just a brace, so CSS and JavaScript in web pages work as they are: `body { margin: 0 }`.
+
+Text inside the `{ }` can use the same quotes as the outside: `"Hi {person.get("name", "you")}"`.
+
+### Text over several lines: `"""`
+
+Three quotes start text that can go over several lines (handy for web pages, help screens and ASCII art):
+
+```eza
+page = """
+    <h1>Hello {name}</h1>
+    <p>You have {score} points.</p>
+    """
+```
+
+The indentation the lines share is taken off, and so are the line breaks right after the opening `"""` and before the closing one. `{ }` fills in values as usual.
 
 ### Getting characters
 
@@ -603,7 +629,7 @@ change fruits by "fig"          # add to the end
 
 Lists also work with `push` and `pop` (see [stacks](#9-stacks-and-queues)): `push 4 to nums` adds to the end, `pop nums` takes the last item off and gives it back.
 
-> **Big lists are fast too.** Lists (and dictionaries) with more than 256 items are changed in place instead of being copied for [`rewind`](#34-time-travel-rewind), so things like `memory = [0].repeat(30000)` stay quick. The catch: those big ones can't be rewound.
+> **Big lists are fast too.** Lists (and dictionaries) with more than 256 items are changed in place instead of being copied for [`rewind`](#37-time-travel-rewind), so things like `memory = [0].repeat(30000)` stay quick. The catch: those big ones can't be rewound.
 
 ### Joining lists
 
@@ -785,7 +811,7 @@ Write a color as `#` followed by hex digits, in any of these forms:
 | `.invert` | opposite color | `#FF0000.invert` is `#00FFFF` |
 | `.saturate(t)` | more vivid (negative `t` = duller) | `#808080.saturate(0.5)` |
 
-Colors can be compared with `==` and animated with [`tween`](#33-smooth-animation-tween).
+Colors can be compared with `==` and animated with [`tween`](#36-smooth-animation-tween).
 
 ---
 
@@ -1231,7 +1257,7 @@ change global["online_mode"] to false
 print(global.get("online_mode", true))
 ```
 
-It's also the one thing (besides the volume) that survives [`go to`](#44-switching-scripts-go-to), so it's how one script passes values to the next.
+It's also the one thing (besides the volume) that survives [`go to`](#47-switching-scripts-go-to), so it's how one script passes values to the next.
 
 ### Other built-in names
 
@@ -1243,7 +1269,7 @@ It's also the one thing (besides the volume) that survives [`go to`](#44-switchi
 | `screen` | window size: `screen.width`, `screen.height` (1280 x 720 until a window opens) |
 | `scene` | your 3D world, once you write a `scene` block |
 | `stage` | your 2D world, once you write a `stage` block |
-| `sound` | `sound.volume`, the master volume (see [sound](#40-sound-and-music-play-stop)) |
+| `sound` | `sound.volume`, the master volume (see [sound](#43-sound-and-music-play-stop)) |
 | `args` | the words typed after the script's name (see [`args`](#27-command-line-arguments-args)) |
 
 ---
@@ -1367,7 +1393,7 @@ if c == #FF0000
 print(c.a)                        # 0 means see-through
 ```
 
-Pictures are also what you give to [sprites](#37-2d-worlds-stage) with `texture=`.
+Pictures are also what you give to [sprites](#40-2d-worlds-stage) with `texture=`.
 
 <a id="csv-files-spreadsheets"></a>
 ### CSV files (spreadsheets)
@@ -1545,7 +1571,7 @@ notes.clear()                                # remove everything
 
 - The path is relative to the script. The file is plain JSON, so you can open it in any text editor.
 - Records you get back are copies: change them with `.update`, not `change`.
-- A database isn't part of the [`rewind`](#34-time-travel-rewind) timeline. It's real saved data.
+- A database isn't part of the [`rewind`](#37-time-travel-rewind) timeline. It's real saved data.
 
 ---
 
@@ -1678,16 +1704,268 @@ else
 - Every item is text: turn numbers into numbers with `num(args[0])`.
 - Put words with spaces in quotes: `eza notes.eza "shopping list"` gives `["shopping list"]`.
 - It works the same with `eza run tool.eza a b`.
-- A program made with [`eza build`](#46-sharing-your-program-eza-build) gets them too: `greet.exe Ada 3`.
+- A program made with [`eza build`](#49-sharing-your-program-eza-build) gets them too: `greet.exe Ada 3`.
 
 ---
 
-## 28. Built-in functions
+## 28. Nicer terminal output: colors, tables, menus
+
+Programs that run in the terminal can look good too.
+
+### Colors and styles
+
+`print` takes style settings:
+
+```eza
+print("Saved!", color="green", bold=true)
+print("Careful", color="orange", background="black")
+print("old news", dim=true, italic=true)
+```
+
+| Setting | Meaning |
+|---|---|
+| `color` | the text color: `red`, `green`, `blue`, `yellow`, `orange`, `purple`, `pink`, `cyan`, `white`, `gray`, `black`, or any color like `#FF8800` |
+| `background` | the color behind the text |
+| `bold`, `italic`, `underline`, `dim` | `true` to turn them on |
+
+When the output goes into a file or another program instead of the terminal (like `eza run tool.eza > out.txt`), the colors are left out automatically, so the file stays clean.
+
+### Tables: `table(rows)`
+
+`table` turns a list into a neat table, as text you can `print`:
+
+```eza
+people = [{name: "Ada", age: 36}, {name: "Bo", age: 7}]
+print(table(people))
+```
+
+```
+┌──────┬─────┐
+│ name │ age │
+├──────┼─────┤
+│ Ada  │  36 │
+│ Bo   │   7 │
+└──────┴─────┘
+```
+
+- A list of dictionaries (or `data` objects) uses their keys as the header.
+- A list of lists has no header unless you give one: `table(rows, header=["Name", "Age"])`.
+- Numbers line up on the right.
+
+### Boxes: `panel(text)`
+
+```eza
+print(panel("Backup finished\n12 files copied", title="Done"))
+```
+
+```
+╭─ Done ──────────╮
+│ Backup finished │
+│ 12 files copied │
+╰─────────────────╯
+```
+
+### Progress bars: `progress(list)`
+
+Loop through `progress(...)` instead of the list, and a bar fills up as the loop goes:
+
+```eza
+each file in progress(files("photos"), "Copying")
+    copy_file(file, "backup")
+```
+
+```
+Copying ███████████████░░░░░░░░░░░░░░░ 6/12  50%
+```
+
+`progress(10)` works too (0 to 9), and two names unpack as usual: `each name, size in progress(pairs)`.
+
+### Menus and passwords: `input`
+
+`input` with `choices=` shows a menu you pick from with the arrow keys and Enter (or by typing its number). It gives back the item you picked:
+
+```eza
+level = input("Pick a level", choices=["Easy", "Normal", "Hard"])
+```
+
+```
+Pick a level
+ > Easy
+   Normal
+   Hard
+```
+
+`hidden=true` shows `*` instead of the letters, for passwords:
+
+```eza
+password = input("Password: ", hidden=true)
+```
+
+### Clearing the screen: `clear()`
+
+`clear()` empties the terminal and puts the cursor at the top.
+
+---
+
+## 29. Terminal apps: `gui` in the terminal
+
+Any [`gui` window](#44-menus-and-huds-gui) can be drawn **in the terminal** instead of in its own window, by adding `terminal=true`. It's the same code, with the same buttons, text boxes and `then` actions:
+
+```eza
+todos = ["Water the plants"]
+new_todo = ""
+
+gui window "todo" terminal=true centered=true title="To-do"
+    text "{len(todos)} things to do"
+    textbox "Something to do..." name="new_todo" then todos.add(new_todo)
+    button "Clear the list" then change todos to []
+    button "Quit" then quit
+```
+
+```
+╭─ To-do ──────────────────────────╮
+│ 1 things to do                   │
+│  Something to do...              │
+│  Clear the list                  │
+│  Quit                            │
+╰──────────────────────────────────╯
+```
+
+### Using it
+
+| Key | What it does |
+|---|---|
+| **Tab** / **Down** | next element |
+| **Shift+Tab** / **Up** | previous element |
+| **Enter** or **Space** | press a button, tick a checkbox, open a dropdown |
+| **Left** / **Right** | move a slider |
+| typing | goes into the selected text box (Enter runs its `then`) |
+| **Ctrl+C** | quit (or use `quit` in your code) |
+
+The mouse works too: click buttons, tick checkboxes, pick from dropdowns and drag sliders.
+
+### What's the same, what's different
+
+- Everything that keeps a window going keeps going here: `on every frame`, `wait`, `on keyboard.pressed("q")`, [text that updates itself](#text-that-keeps-itself-up-to-date), `on button.hover`.
+- Elements: `window`, `box`, `text`, `button`, `textbox`, `checkbox`, `slider`, `dropdown`, and `chart` (as a bar chart made of blocks).
+- Sizes are in letters and lines instead of pixels; a `width=` or `height=` you give is turned into about the same size.
+- Colors work (`color=`, `background=`), but fonts, font sizes, pictures and rounded corners don't.
+- `title="To-do"` puts a title in the window's border; `fullscreen=true` fills the whole terminal.
+- It needs a real terminal (not output into a file).
+
+See [`examples/todo_terminal.eza`](examples/todo_terminal.eza).
+
+---
+
+## 30. Websites and web services: `serve`
+
+`serve` turns your script into a small web server. Each `page` is an address, and what it `return`s is what the browser gets:
+
+```eza
+serve port=8000
+    page "/" then return "<h1>Hello from Eza!</h1>"
+    page "/time" then return "It's {now().format("hh:mm")}"
+```
+
+Run the script, then open **http://localhost:8000** in your browser. The terminal lists every request; **Ctrl+C** stops the server.
+
+### What a page can give back
+
+| `return` | The browser gets |
+|---|---|
+| text starting with `<` | a web page (HTML) |
+| other text | plain text |
+| a list or a dictionary | JSON (for other programs and JavaScript) |
+| nothing | an empty answer |
+
+Web pages are easiest with [text over several lines](#text-over-several-lines-), and `{ }` fills in your values:
+
+```eza
+page "/"
+    return """
+        <h1>High scores</h1>
+        <p>{len(scores)} players so far</p>
+        """
+```
+
+### Addresses with parts that change
+
+`{name}` in an address matches any word there, and the page gets it as a variable (always text):
+
+```eza
+page "/hello/{name}" then return "Hi {name}!"
+page "/scores/{id}" then return scores[num(id)]
+```
+
+### What came in: `request`
+
+Inside a page, `request` holds what the browser sent:
+
+| | |
+|---|---|
+| `request.method` | `"GET"`, `"POST"`, ... |
+| `request.path` | the address, like `"/hello/ada"` |
+| `request.query` | the `?a=1&b=2` part, as a dictionary: `request.query.get("q", "")` |
+| `request.form` | the fields of a submitted HTML form, as a dictionary |
+| `request.data` | JSON that a program sent, already turned into lists and dictionaries |
+| `request.body` | everything that was sent, as text |
+| `request.headers` | the headers, as a dictionary (names in lowercase) |
+
+Pages answer `GET` (opening the address) unless you say otherwise: `page "/add" method="POST"`.
+
+### Changing the answer: `response`
+
+```eza
+page "/secret"
+    change response.status to 403
+    return "Not for you"
+```
+
+| | |
+|---|---|
+| `response.status` | `200` (OK) unless you change it: `404` not found, `303` go somewhere else ... |
+| `response.type` | the kind of answer, if the automatic choice is wrong: `"html"`, `"text"`, `"json"`, `"css"`, `"js"` |
+| `response.headers` | extra headers, as a dictionary |
+
+A form that saves something and then goes back to the main page:
+
+```eza
+page "/add" method="POST"
+    scores.add({name: request.form.get("name", "?"), points: num(request.form.get("points", "0"))})
+    change response.status to 303
+    change response.headers to {Location: "/"}
+```
+
+### Files: `folder=`
+
+`serve folder="public"` also sends the files in that folder as they are: `public/style.css` is at `/style.css`, pictures at `/pictures/cat.png`, and `public/index.html` at `/` (when no page has that address). Pages come first.
+
+### Settings
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `port` | `8000` | the number in the address (`http://localhost:8000`) |
+| `folder` | none | files to send as they are |
+| `share` | `false` | `true` lets other devices on your network (like your phone) open it too; the terminal shows the address to use |
+
+### Good to know
+
+- When a page has an error, the browser gets an error page, the terminal shows the full message, and the server **keeps running**.
+- Your other code keeps running too: `on every frame` and `wait` work while the server waits for visitors, and a page can change variables the next visitor will see.
+- `serve` works in a script with a game window or a terminal app too, so a game can have a live scoreboard page.
+- Without `share=true`, only this computer can open the pages. With it, anyone on your network can, so don't put secrets in them.
+- `quit` in a page stops the server.
+
+See [`examples/website.eza`](examples/website.eza): a high-score site with a form and a JSON address.
+
+---
+
+## 31. Built-in functions
 
 | Function | What it does | Example | Result |
 |---|---|---|---|
 | `print(a, b, ...)` | shows values, separated by spaces | `print("hp:", 10)` | `hp: 10` |
-| `input(prompt)` | asks the user to type something; gives back text | `name = input("Name? ")` | |
+| `input(prompt)` | asks the user to type something; gives back text (`choices=[...]` for a menu, `hidden=true` for passwords) | `name = input("Name? ")` | |
 | `len(x)` | length of text or a list | `len("hey")` | `3` |
 | `str(x)` | turns anything into text | `str(12) + "!"` | `"12!"` |
 | `num(x)` | turns text (or true/false) into a number | `num("2.5")` | `2.5` |
@@ -1709,6 +1987,7 @@ else
 | `fetch(url)` | download from the web | | see [the web](#23-the-web-fetch) |
 | `database(path)` | records saved in a file | | see [databases](#24-saving-records-database) |
 | `raycast(from=, direction=, distance=)` | the first thing along a line | | see [2D](#touching-and-looking) |
+| `table(rows)` / `panel(text)` / `progress(list)` / `clear()` | terminal output | `print(table(people))` | see [terminal output](#28-nicer-terminal-output-colors-tables-menus) |
 | `find_path(grid, start, goal)` | the way through a grid, around walls | `find_path(["..#", "..."], [0, 0], [2, 1])` | see [pathfinding](#finding-a-way-pathfinding) |
 
 **Brackets on methods:** a method that needs nothing passed to it can be written with or without `()`: `name.upper` and `name.upper()` are the same. A method that takes something always needs them: `name.replace("a", "b")`.
@@ -1724,7 +2003,7 @@ Some things that read files or change things are **statements** instead of funct
 
 ---
 
-## 29. Time: frames and `tick`
+## 32. Time: frames and `tick`
 
 The features from here on are about **time**. Eza counts time in **frames** (also called **steps**). In the 3D window there are 60 frames per second, and the engine advances one frame automatically each time.
 
@@ -1748,7 +2027,7 @@ Each frame, in this order, Eza:
 
 ---
 
-## 30. Reacting to things: `on`
+## 33. Reacting to things: `on`
 
 `on` sets up code that runs **when a condition becomes true**:
 
@@ -1852,7 +2131,7 @@ trigger "scored" with 10
 
 ---
 
-## 31. Pausing: `wait`
+## 34. Pausing: `wait`
 
 `wait` pauses a function or `on` block for a while, then carries on where it left off:
 
@@ -1885,7 +2164,7 @@ print("this prints right away")
 
 ---
 
-## 32. Temporary effects: `persist`
+## 35. Temporary effects: `persist`
 
 `persist` makes changes that **undo themselves** later, which is useful for power-ups, buffs and status effects. Write the changes, then say when they should end.
 
@@ -1946,7 +2225,7 @@ When the effect ends:
 
 ---
 
-## 33. Smooth animation: `tween`
+## 36. Smooth animation: `tween`
 
 `tween` slides a value smoothly to a new value over a number of frames:
 
@@ -1985,7 +2264,7 @@ if not door.tweening
 
 ---
 
-## 34. Time travel: `rewind`
+## 37. Time travel: `rewind`
 
 Every `change` is recorded as a step, and `rewind` steps back through them.
 
@@ -2028,7 +2307,7 @@ History keeps the most recent 1000 steps.
 
 ---
 
-## 35. Predicting the future: `mimic`
+## 38. Predicting the future: `mimic`
 
 `mimic` runs a simulation on a **copy** of an object (a "shadow"), so you can see what would happen without changing the real thing. An AI can use this to look ahead.
 
@@ -2074,9 +2353,9 @@ Cannot modify global variable 'score' inside an isolated simulation block.
 
 ---
 
-## 36. 3D worlds: `scene`
+## 39. 3D worlds: `scene`
 
-A `scene` block describes a 3D world. **If your script has a `scene`, `eza yourfile.eza` opens a window and shows it.** Without one (and without a `stage` or `gui`), the script just runs in the terminal. For 2D games, see [`stage`](#37-2d-worlds-stage).
+A `scene` block describes a 3D world. **If your script has a `scene`, `eza yourfile.eza` opens a window and shows it.** Without one (and without a `stage` or `gui`), the script just runs in the terminal. For 2D games, see [`stage`](#40-2d-worlds-stage).
 
 ```eza
 scene name="demo"
@@ -2117,7 +2396,7 @@ kind "optional label" key=value key=value ...
 | `cylinder` | tube | `width` (diameter), `height` |
 | `camera` | where you look from (always looks at the center) | `position` |
 | `light` | sunlight pointing at the center | `position`, `brightness` |
-| `particles` | sparks, smoke, fire (see [particles](#38-particles-sparks-smoke-snow)) | |
+| `particles` | sparks, smoke, fire (see [particles](#41-particles-sparks-smoke-snow)) | |
 | any other word | a character such as `player`, `enemy`, `tree` (drawn as a capsule) | |
 
 - If there's no `camera`, it sits at `0,12,18`. If there's no `light`, a default one is added.
@@ -2242,7 +2521,7 @@ There are two ways to use input, and both are fine:
 
 ---
 
-## 37. 2D worlds: `stage`
+## 40. 2D worlds: `stage`
 
 A `stage` block is the 2D version of a `scene`. **If your script has a `stage`, `eza yourfile.eza` opens a window.** You can even have a `scene` and a `stage` together; the 2D layer is drawn on top.
 
@@ -2440,7 +2719,7 @@ Positions are 2-number vectors, and all the [vector math](#11-vectors-positions-
 
 ---
 
-## 38. Particles: sparks, smoke, snow
+## 41. Particles: sparks, smoke, snow
 
 Particles are lots of tiny dots that fly out, fade and disappear. Put a `particles` line in a `stage` (2D) or a `scene` (3D):
 
@@ -2497,7 +2776,7 @@ change sparks.color to #80D8FF
 
 ---
 
-## 39. Templates and live objects: `prefab`, `spawn`, `destroy`
+## 42. Templates and live objects: `prefab`, `spawn`, `destroy`
 
 ### `prefab`: a template
 
@@ -2588,7 +2867,7 @@ Because `fly` contains `wait`, each bullet flies on its own in the background.
 
 ---
 
-## 40. Sound and music: `play`, `stop`
+## 43. Sound and music: `play`, `stop`
 
 ```eza
 play "assets/sounds/coin.wav"                         # a sound effect
@@ -2620,13 +2899,13 @@ It's a great match for a [slider](#typing-dragging-ticking-choosing-inputs): `sl
 
 ### Music that keeps going
 
-If a looping sound is **already playing**, `play` with the same file doesn't restart it: it just updates its volume and speed. That means every level can start with the same `play "music.wav" loop=true` line, and when you [switch scripts](#44-switching-scripts-go-to) the music carries on smoothly. Looping sounds that the new script doesn't play are stopped.
+If a looping sound is **already playing**, `play` with the same file doesn't restart it: it just updates its volume and speed. That means every level can start with the same `play "music.wav" loop=true` line, and when you [switch scripts](#47-switching-scripts-go-to) the music carries on smoothly. Looping sounds that the new script doesn't play are stopped.
 
 Sound only plays in a window. In a terminal-only script, `play` still checks that the file exists, but stays silent.
 
 ---
 
-## 41. Menus and HUDs: `gui`
+## 44. Menus and HUDs: `gui`
 
 A `gui` block builds a 2D window of boxes, text, buttons and inputs drawn on top of everything else. A script with only a `gui` (no scene or stage) still opens a window, so you can make plain apps too.
 
@@ -2674,7 +2953,7 @@ change title.label to "PAUSED!"
 | `slider` | a bar with a knob you drag |
 | `checkbox` | a tick box with a label |
 | `dropdown` | a button that opens a list of choices |
-| `chart` | a bar, line or pie chart of a variable (see [charts](#43-charts)) |
+| `chart` | a bar, line or pie chart of a variable (see [charts](#46-charts)) |
 
 ### Properties
 
@@ -2690,8 +2969,8 @@ change title.label to "PAUSED!"
 | `color` | background (or the text color, for `text`) |
 | `text_color` | label color on a button |
 | `font_size` | text size in points (default 12, which is 16 pixels) |
-| `background`, `rounded`, `border`, `glow`, `shadow`, `font` | see [styles](#42-styles-making-menus-look-good) |
-| `style=name` | use a [style](#42-styles-making-menus-look-good) |
+| `background`, `rounded`, `border`, `glow`, `shadow`, `font` | see [styles](#45-styles-making-menus-look-good) |
+| `style=name` | use a [style](#45-styles-making-menus-look-good) |
 | `visible` | `false` hides it and everything inside |
 
 Elements without a size fit their contents.
@@ -2759,7 +3038,7 @@ gui window "settings" centered=true padding=20 gap=10
 - If the variable already exists and you don't give a starting value, the input shows what's in it. That's why the example sets `volume = sound.volume` first.
 - Code after `then` runs **whenever the user changes the value**: every move of a slider, every tick of a checkbox, every choice in a dropdown. For a textbox it runs when **Enter** is pressed.
 - Click a textbox to type in it. Backspace deletes, and Enter or Escape (or clicking elsewhere) finishes.
-- Inputs use `style=` and the [style properties](#42-styles-making-menus-look-good) like everything else.
+- Inputs use `style=` and the [style properties](#45-styles-making-menus-look-good) like everything else.
 
 ### Updating the screen
 
@@ -2772,7 +3051,7 @@ on keyboard.pressed("escape")
 
 ---
 
-## 42. Styles: making menus look good
+## 45. Styles: making menus look good
 
 A `style` is a reusable look, a bit like CSS on websites. Write it once and use it on as many elements as you like:
 
@@ -2822,7 +3101,7 @@ CSS-style names work too: `background-color`, `border-radius`, `font-size`, `fon
 
 ---
 
-## 43. Charts
+## 46. Charts
 
 A `chart` in a `gui` draws a bar, line or pie chart of a variable, and **redraws by itself whenever that variable changes**:
 
@@ -2852,13 +3131,13 @@ on keyboard.pressed("space")
 | `color` | one color for every bar / the line | |
 | `colors=#4C9AFF,#FF8A65,...` | colors to cycle through | a built-in palette |
 | `width`, `height` | size | `360`, `220` |
-| `background`, `rounded`, ... | the panel's look, like any [element](#42-styles-making-menus-look-good) | dark panel |
+| `background`, `rounded`, ... | the panel's look, like any [element](#45-styles-making-menus-look-good) | dark panel |
 
 Bar and line charts get a scale with round numbers. Pie charts get a legend with each value and its percentage.
 
 ---
 
-## 44. Switching scripts: `go to`
+## 47. Switching scripts: `go to`
 
 Bigger games are easier to build as several files: a menu, a few levels, a game-over screen. `go to` switches to another script **in the same window**:
 
@@ -2894,7 +3173,7 @@ See `examples/menu.eza` and `examples/arena.eza` for a complete menu → game �
 
 ---
 
-## 45. Finding and fixing mistakes
+## 48. Finding and fixing mistakes
 
 ### Reading an error message
 
@@ -3044,7 +3323,7 @@ Spawned and destroyed objects, particles, and lists or dictionaries with more th
 
 ---
 
-## 46. Sharing your program: `eza build`
+## 49. Sharing your program: `eza build`
 
 ```
 eza build game.eza
@@ -3066,7 +3345,7 @@ Zip the `dist/game` folder and send it. Building again replaces the old build.
 
 ---
 
-## 47. Cheat sheet
+## 50. Cheat sheet
 
 ```eza
 # ---- basics
@@ -3213,6 +3492,18 @@ db = database("notes.db")   db.add({title: "x"})   db.find({done: false})   db.u
 chart "Sales" kind=bar data=sales      # inside a gui
 eza build game.eza                     # in the terminal: dist/game/game.exe
 
+# ---- terminal, terminal apps, web
+print("Done", color="green", bold=true)   print(table(rows))   print(panel("hi", title="Note"))
+each f in progress(files)   choice = input("Pick", choices=["A", "B"])   clear()   quit
+gui window "app" terminal=true            # the same gui, drawn in the terminal
+serve port=8000 folder="public"
+    page "/" then return "<h1>Hi</h1>"
+    page "/api/{name}" then return {name: name}
+    page "/add" method="POST" then scores.add(request.data)
+text = """
+    several lines
+    """
+
 # ---- modules, files and programs
 use "enemies.eza"   enemies.make("orc")   use "lib/tools.eza" as t   _private_name
 args                                   # eza tool.eza a b  ->  ["a", "b"]
@@ -3223,7 +3514,7 @@ r = run("git status")   r.output   r.ok   run(["git", "add", "."])   run("sort",
 
 ---
 
-## 48. Common errors and what they mean
+## 51. Common errors and what they mean
 
 The message itself usually says what to do (see [reading an error message](#reading-an-error-message)). The code at the end of the first line, like `(E003)`, can be looked up with `eza explain E003`.
 
@@ -3271,6 +3562,9 @@ The message itself usually says what to do (see [reading an error message](#read
 | `a prefab only has .all (its live copies) and .count` | reading a property of the prefab itself, like `Coin.value` | spawn a copy first (`c = spawn Coin`) and use `c.value` |
 | `'coins' doesn't exist yet - make an empty list first` | `spawn ... into coins` before `coins = []` | create the list first |
 | `sprite has no animation called "wlak"` | `animation` names one that isn't in `animations` | check the spelling; the message lists the names it has |
+| `port 8000 is already used by another program` | something else on your computer uses that port | pick another: `serve port=8001` |
+| `this program shows a terminal app ... which needs a real terminal` | a `terminal=true` gui was run with its output going into a file | run it in a terminal window |
+| `print doesn't have a setting called '...'` | a misspelled style, like `colour=` | the message suggests the right one |
 | `nothing listens for the event "x"` (a warning) | `trigger "x"`, but there's no `on event "x"` | check the spelling of both |
 | `can't start "..."` | `run` couldn't find the program | check it's installed and spelled right |
 | `there's no file "..." to delete` | a path is wrong | check it with `exists()` first |

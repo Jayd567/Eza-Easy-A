@@ -88,6 +88,7 @@ fn blocks(s: &Stmt) -> Vec<&[Stmt]> {
         StmtKind::On(_, b) | StmtKind::Mimic(_, _, b) => vec![b],
         StmtKind::OnTouch { body, .. } | StmtKind::OnEvent { body, .. } => vec![body],
         StmtKind::Persist { body, .. } => vec![body],
+        StmtKind::Serve { pages, .. } => pages.iter().map(|p| p.body.as_slice()).collect(),
         _ => vec![],
     }
 }
@@ -256,6 +257,16 @@ pub fn check<'p>(progs: &'p [(String, Vec<Stmt>)]) -> Vec<EzaError> {
             StmtKind::Unpack { names, .. } => {
                 for n in names {
                     put(&mut facts, n, Ev::Fixed(Ty::Unknown));
+                }
+            }
+            StmtKind::Serve { pages, .. } => {
+                for p in pages {
+                    put(&mut facts, "request", Ev::Fixed(Ty::Unknown));
+                    put(&mut facts, "response", Ev::Fixed(Ty::Unknown));
+                    // /hello/{name}: the name always holds text
+                    for n in crate::server::path_params(&p.path) {
+                        put(&mut facts, &n, Ev::Fixed(Ty::Str));
+                    }
                 }
             }
             StmtKind::Define(d) => {
@@ -881,7 +892,7 @@ fn binary_result(op: Op, a: &Ty, b: &Ty) -> Option<Ty> {
 fn builtin_result(n: &str) -> Ty {
     match n {
         "len" | "num" | "int" | "random" | "random_int" | "sin" | "cos" | "tan" | "asin" | "acos" | "atan" | "atan2" | "radians" | "degrees" | "distance" | "ord" => Ty::Num,
-        "str" | "input" | "type" | "chr" => Ty::Str,
+        "str" | "type" | "chr" | "table" | "panel" => Ty::Str,
         "range" | "files" | "folders" | "find_files" => Ty::List,
         "exists" | "is_folder" => Ty::Bool,
         _ => Ty::Unknown,

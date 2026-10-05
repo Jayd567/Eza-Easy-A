@@ -8,6 +8,15 @@ const KEYWORDS = {
   else: 'Runs when the `if` condition was false. `else if` chains another check.',
   each: 'Loop over a list, text, or a number of steps.  `each fruit in fruits then`  /  `each step in 60`',
   in: '`each item in list` loops. In a condition it checks inside: `"key" in inventory` (list), `"@" in email` (text), `"theme" in settings` (dictionary keys), `hp in 1 to 50` (between, both included).',
+  serve: 'A web server: `serve port=8000 folder="public"` then indented pages:  `page "/" then return "<h1>Hi</h1>"`. Text starting with < is a web page, lists and dictionaries go out as JSON. Open http://localhost:8000.',
+  page: 'A page of a `serve` web server:  `page "/hello/{name}" then return "Hi {name}"`.  `method="POST"` for forms. Inside: `request` (method, path, query, form, data, body, headers) and `response` (status, type, headers).',
+  request: 'Inside a `page`: what the browser sent.  .method  .path  .query (dictionary)  .form (form fields)  .data (JSON sent by a program)  .body  .headers',
+  response: 'Inside a `page`: change the answer.  `change response.status to 404`,  `change response.type to "json"`,  `change response.headers to {Location: "/"}`',
+  quit: '`quit` ends the program right away: the script, its window, web server or terminal app.  `button "Quit" then quit`',
+  table: 'table(rows) - a list as a neat text table (dictionaries give the header; lists take header=[...]).  `print(table(people))`',
+  panel: 'panel(text, title="Note") - the text in a box with rounded corners.',
+  progress: '`each f in progress(files, "Copying")` - a progress bar that fills up as the loop goes.',
+  terminal: '`gui window "app" terminal=true` - draws the window in the terminal (Tab/arrows/Enter/mouse, Ctrl+C quits).',
   match: 'Choose by value:  `match weapon` then indented choices:  `"sword" then ...`,  `"bow", "crossbow" then ...`,  `1 to 5 then ...`,  `else ...`. Only the first matching choice runs.',
   or: '`a or b`: true if either is. Gives back the first value that counts as true, so `name = saved or "Guest"` gives a default.',
   and: '`a and b`: true if both are. Gives back the first value that counts as false (or the last one).',
@@ -95,7 +104,7 @@ const KEYWORDS = {
 };
 
 const BUILTINS = {
-  print: 'print(a, b, ...) or print a, b - show values separated by spaces',
+  print: 'print(a, b, ...) or print a, b - show values separated by spaces. Styles: color="green", background=, bold=true, italic=true, underline=true, dim=true.',
   len: 'len(x) - length of text or a list',
   str: 'str(x) - turn anything into text',
   num: 'num("3.5") - turn text into a number',
@@ -200,7 +209,7 @@ const METHODS = {
   add: M('.add(x)', 'list: adds x at the end;  database: saves a record and gives it back with an id', 'list, database'),
   update: M('.update(record, changes)', 'change fields of a saved record (or of every record matching a pattern)', 'database'),
   first: M('.first', 'first item;  database .first(f): the first matching record', 'list, database'),
-  clear: M('.clear()', 'remove every record', 'database'),
+  clear: M('clear()', 'clear() empties the terminal;  db.clear() removes every record', 'terminal, database'),
   magnitude: M('.magnitude', 'length of a vector', 'vector'), normalize: M('.normalize', 'vector of length 1 pointing the same way', 'vector'),
   dot: M('.dot(other)', 'dot product of two vectors', 'vector'), cross: M('.cross(other)', 'cross product of two 3D vectors', 'vector'),
   alive: M('.alive', 'false after the object made by spawn was destroyed', 'spawn'),
