@@ -21,7 +21,7 @@ fn names_in_expr(e: &Expr, out: &mut HashSet<String>) {
             out.insert(n.clone());
         }
         Expr::Field(o, _) | Expr::Unary(_, o) | Expr::Load(o) | Expr::Pop(o) => names_in_expr(o, out),
-        Expr::Index(o, i) | Expr::Binary(_, o, i) => {
+        Expr::Index(o, i) | Expr::Binary(_, o, i) | Expr::Range(o, i) => {
             names_in_expr(o, out);
             names_in_expr(i, out);
         }
@@ -57,6 +57,7 @@ fn names_in_stmts(stmts: &[Stmt], out: &mut HashSet<String>) {
         let mut e = |x: &Expr| names_in_expr(x, out);
         match &s.kind {
             StmtKind::Assign(_, x) | StmtKind::Expr(x) | StmtKind::Destroy(x) | StmtKind::Expect(x) | StmtKind::Param(_, x) | StmtKind::Go(x) => e(x),
+            StmtKind::Unpack { value, .. } => e(value),
             StmtKind::Change(a, _, b) | StmtKind::Push(a, b) => {
                 e(a);
                 e(b);
@@ -148,6 +149,7 @@ fn assigned_in(stmts: &[Stmt], out: &mut Vec<(String, usize)>) {
     for s in stmts {
         match &s.kind {
             StmtKind::Assign(n, _) => out.push((n.clone(), s.line)),
+            StmtKind::Unpack { names, create: true, .. } => out.extend(names.iter().map(|n| (n.clone(), s.line))),
             StmtKind::If(arms, els) => {
                 arms.iter().for_each(|(_, b)| assigned_in(b, out));
                 if let Some(b) = els {
@@ -167,7 +169,7 @@ const IMPLICIT: &[&str] = &["keyboard", "mouse", "global", "pi", "screen", "scen
 struct Ctx {
     /// every name that is created anywhere in the program (order doesn't matter)
     names: HashSet<String>,
-    defs: HashMap<String, Vec<Vec<String>>>,
+    defs: HashMap<String, Vec<std::rc::Rc<FuncDef>>>,
     plain: HashSet<String>,
     binders: HashSet<String>,
     /// a gui window with a computed name: we can't know every name, so skip the typo check
@@ -337,7 +339,7 @@ impl Ctx {
             StmtKind::Assign(n, e) => {
                 self.names.insert(n.clone());
                 if let Expr::Lambda(d) = e {
-                    self.defs.entry(n.clone()).or_default().push(d.params.clone());
+                    self.defs.entry(n.clone()).or_default().push(d.clone());
                     self.collect_func(d);
                 } else {
                     self.plain.insert(n.clone());
@@ -345,14 +347,22 @@ impl Ctx {
             }
             StmtKind::Define(d) => {
                 self.names.insert(d.name.clone());
-                self.defs.entry(d.name.clone()).or_default().push(d.params.clone());
+                self.defs.entry(d.name.clone()).or_default().push(d.clone());
                 self.def_lines.insert(d.name.clone(), (d.line, self.file.clone()));
                 self.collect_func(d);
             }
             StmtKind::Each(v, _, b) => {
-                self.names.insert(v.clone());
-                self.binders.insert(v.clone());
+                for n in each_names(v) {
+                    self.names.insert(n.to_string());
+                    self.binders.insert(n.to_string());
+                }
                 self.collect(b);
+            }
+            StmtKind::Unpack { names, .. } => {
+                for n in names {
+                    self.names.insert(n.clone());
+                    self.plain.insert(n.clone());
+                }
             }
             StmtKind::If(arms, els) => {
                 for (_, b) in arms {
@@ -491,6 +501,16 @@ impl Ctx {
                 d.help.push(format!("remove it, or move it above the '{}'", word));
                 self.diags.push(d);
             }
+            if let StmtKind::Unpack { names, create: true, .. } = &s.kind {
+                for n in names {
+                    if let Some(first) = seen.get(n).copied() {
+                        let at = if first == 0 { String::new() } else { format!(" (line {})", first) };
+                        self.report(s.line, format!("'{0}' already exists{1} - use 'change {0} to ...' to update it", n, at), Target::Name(n.clone()), None, false);
+                    } else {
+                        seen.insert(n.clone(), s.line);
+                    }
+                }
+            }
             if let StmtKind::Assign(n, e) = &s.kind {
                 let help = Some(format!("to give it a new value:   change {} to {}", n, crate::diagnose::code(e)));
                 match seen.get(n) {
@@ -558,7 +578,16 @@ impl Ctx {
             }
             StmtKind::Each(v, e, b) => {
                 self.check_expr(e, line);
-                self.check_block(b, &[v.clone()]);
+                let names: Vec<String> = each_names(v).into_iter().map(String::from).collect();
+                self.check_block(b, &names);
+            }
+            StmtKind::Unpack { names, value, create } => {
+                self.check_expr(value, line);
+                if !create {
+                    for n in names {
+                        self.use_name(n, line);
+                    }
+                }
             }
             StmtKind::While(c, b) => {
                 self.check_expr(c, line);
@@ -698,7 +727,7 @@ impl Ctx {
                 }
             }
             Expr::Unary(_, x) | Expr::Load(x) | Expr::Pop(x) => self.check_expr(x, line),
-            Expr::Binary(_, l, r) => {
+            Expr::Binary(_, l, r) | Expr::Range(l, r) => {
                 self.check_expr(l, line);
                 self.check_expr(r, line);
             }
@@ -772,7 +801,8 @@ impl Ctx {
         if defs.len() != 1 || self.plain.contains(n) || self.binders.contains(n) {
             return;
         }
-        let params = defs[0].clone();
+        let def = defs[0].clone();
+        let params = def.params.clone();
         let positional = args.iter().filter(|a| a.name.is_none()).count();
         let usage = Some(format!("call it like:   {}({})", n, params.join(", ")));
         let mut problem = None;
@@ -790,7 +820,8 @@ impl Ctx {
         if problem.is_none() {
             for (i, p) in params.iter().enumerate() {
                 let named = args.iter().any(|a| a.name.as_deref() == Some(p));
-                if i >= positional && !named {
+                let has_default = matches!(def.defaults.get(i), Some(Some(_)));
+                if i >= positional && !named && !has_default {
                     problem = Some(format!("{} is missing the argument '{}'", n, p));
                     break;
                 }

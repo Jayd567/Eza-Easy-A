@@ -389,5 +389,23 @@
       "spawn ${2:Coin} at ${3:0}, ${4:0} into $1"
     ],
     "description": "spawn a copy and keep it in a list (destroy takes it out)"
+  },
+  "match": {
+    "prefix": "match",
+    "body": [
+      "match ${1:weapon}",
+      "\t${2:\"sword\"} then ${3:print(\"slash\")}",
+      "\t${4:\"bow\", \"crossbow\"} then ${5:print(\"shoot\")}",
+      "\telse ${6:print(\"bonk\")}"
+    ],
+    "description": "choose by value (shorter than many else ifs)"
+  },
+  "each key, value": {
+    "prefix": "eachkv",
+    "body": [
+      "each ${1:key}, ${2:value} in ${3:dictionary}",
+      "\t$0"
+    ],
+    "description": "loop over a dictionary's keys and values"
   }
 }

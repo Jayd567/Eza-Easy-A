@@ -211,6 +211,18 @@ You can only create a name once per block. Writing `score = 5` again in the same
 'score' already exists - use 'change score to ...' to update it
 ```
 
+### Several names at once
+
+Names separated by commas take the items of a list, one each:
+
+```eza
+x, y = hero.position          # x is position[0], y is position[1]
+name, hp = ["Ada", 30]
+change x, y to [y, x]         # swap them
+```
+
+There must be exactly one item per name. A function that returns several values (`return a, b`) gives a list, so `low, high = min_max(scores)` works too.
+
 ### Update with `change ... to` (replace)
 
 ```eza
@@ -301,7 +313,39 @@ Each `change` is a step on a timeline, and Eza remembers the last 1000 steps of 
 | `or` | at least one true | `key == "a" or key == "left"` |
 | `not` | flip | `not game_over` |
 
-`and` and `or` always give `true` or `false`, and they stop early: in `a and b`, `b` isn't even looked at if `a` is false.
+They stop early: in `a and b`, `b` isn't even looked at if `a` is false.
+
+`or` gives back the first value that counts as true (or the last one), which makes **defaults** easy:
+
+```eza
+name = saved_name or "Guest"      # "Guest" if saved_name is none or ""
+```
+
+(`and` works the same way: it gives back the first value that counts as false, or the last one.) In an `if`, this behaves exactly like true and false.
+
+### Is it in there? `in`
+
+```eza
+if "key" in inventory             # is it in the list?
+if "@" in email                   # is this text inside the text?
+if "theme" in settings            # does the dictionary have this key?
+if hp in 1 to 50                  # is the number between these two (both included)?
+```
+
+`not "key" in inventory` is the opposite.
+
+### Ranges: `to`
+
+`a to b` is every whole number from `a` to `b`, **both included**:
+
+```eza
+print(1 to 5)                     # [1, 2, 3, 4, 5]
+each level in 1 to 10
+    print("Level {level}")
+each n in 3 to 1                  # counts down: 3, 2, 1
+```
+
+With `in`, a range checks **any** number between the two, not only whole ones: `12.5 in 1 to 50` is `true`.
 
 ### Bits (bitwise operators)
 
@@ -328,10 +372,11 @@ They need whole numbers. Each one also has a method version, listed under [numbe
 6. `&`
 7. `^`
 8. `|`
-9. `==` `!=` `<` `>` `<=` `>=`
-10. `not`
-11. `and`
-12. `or`
+9. `to`
+10. `==` `!=` `<` `>` `<=` `>=` `in`
+11. `not`
+12. `and`
+13. `or`
 
 Use parentheses whenever you're unsure: `(a + b) * 2`.
 
@@ -652,11 +697,14 @@ Reading a key that doesn't exist with `.` or `[ ]` is an error. Use `.get` when 
 
 ### Looping
 
-`each` goes through the keys:
+`each` goes through the keys. With two names, it gives each key **and** its value:
 
 ```eza
 each key in settings
-    print(key, "=", settings[key])
+    print(key)
+
+each key, value in settings
+    print(key, "=", value)
 ```
 
 Dictionaries are also what `.json` files turn into. See [files](#21-files-and-pictures-load-save-append).
@@ -760,6 +808,33 @@ else
 if lives == 0 then print("Game over")
 ```
 
+### Choosing between many: `match`
+
+When one value decides between many choices, `match` is shorter than a long `if` / `else if` chain:
+
+```eza
+match weapon
+    "sword" then change damage to 10
+    "bow", "crossbow" then change damage to 6
+    "staff"
+        change damage to 4
+        change mana by -5
+    else change damage to 1
+```
+
+- Each line under `match` is a choice: one value, or several separated by commas. Then `then` and one statement, or an indented block, just like `if`.
+- A range matches any number between the two: `1 to 30 then print("hurt")`.
+- `else` (optional, and last) runs when nothing else matched.
+- Only the first matching choice runs, and the value after `match` is worked out just once.
+
+```eza
+match hp
+    0 then print("defeated")
+    1 to 30 then print("badly hurt")
+    31 to 99 then print("hurt")
+    else print("full health")
+```
+
 ---
 
 ## 14. Loops: `each` and `while`
@@ -778,7 +853,7 @@ What you can loop over:
 | a list | `each f in fruits` | each item in turn |
 | a number `n` | `each i in 5` | `0, 1, 2, 3, 4` |
 | text | `each ch in "abc"` | `"a"`, `"b"`, `"c"` |
-| `range(a, b)` | `each i in range(2, 5)` | `2, 3, 4` |
+| a range | `each i in 2 to 5` | `2, 3, 4, 5` (see [ranges](#ranges-to)) |
 | a dictionary | `each key in settings` | each key |
 | a stack or queue | `each item in s` | each item, oldest first |
 
@@ -792,6 +867,8 @@ print(fruits)              # ["APPLE", "KIWI"]
 ```
 
 This works for objects in a list too: `each d in dots then change d.x by 1` moves every dot.
+
+**Two names unpack each item:** `each x, y in [[1, 2], [3, 4]]` gives `x = 1, y = 2`, then `x = 3, y = 4`. On a dictionary, two names give each key and its value: `each name, score in high_scores`.
 
 ### `while`: repeat as long as something is true
 
@@ -838,6 +915,22 @@ greet("Ada")             # Hello, Ada
 - If you like brackets (like when calling it), those work too: `define greet(name)`, `define heal(target, amount)`.
 - A function with no parameters is just `define say_hi`.
 - **Calling always uses parentheses**, even with no arguments: `say_hi()`.
+
+### Default values
+
+Give a parameter a value with `=`, and calls can leave it out:
+
+```eza
+define greet, name, greeting = "Hello"
+    print("{greeting}, {name}!")
+
+greet("Ada")                  # Hello, Ada!
+greet("Bo", "Hi")             # Hi, Bo!
+greet("Cy", greeting="Hey")   # Hey, Cy!
+```
+
+- Parameters with a default go after the ones without one.
+- The default is worked out on each call, and can use the parameters before it: `define area, w, h = w`.
 
 ### Returning values
 
@@ -1602,8 +1695,6 @@ else
 | `type(x)` | the type's name | `type(5)` | `"number"` |
 | `chr(n)` | the letter with code `n` | `chr(65)` | `"A"` |
 | `ord(letter)` | the code of one letter | `ord("A")` | `65` |
-| `range(n)` | list `0` up to `n - 1` | `range(3)` | `[0, 1, 2]` |
-| `range(a, b)` | list `a` up to `b - 1` | `range(2, 5)` | `[2, 3, 4]` |
 | `random()` | random number from 0 up to (but not including) 1 | `random()` | e.g. `0.42` |
 | `random_int(a, b)` | random whole number from `a` to `b` (both included) | `random_int(1, 6)` | e.g. `4` |
 | `distance(a, b)` | distance between two points | | see [vectors](#11-vectors-positions-and-directions) |
@@ -2981,6 +3072,9 @@ Zip the `dist/game` folder and send it. Building again replaces the old build.
 # ---- basics
 x = 5                         # create
 change x to 10                # replace
+x, y = [3, 4]                 # several names from a list
+name = saved or "Guest"       # or gives a default
+if "key" in inventory         # in: lists, text, dictionaries, 1 to 10
 change x by 1                 # add (numbers, text, lists, vectors)
 print("x is {x}")             # text with values filled in
 
@@ -2994,12 +3088,19 @@ else
     ...
 each item in list_or_number_or_text
     ...
+each i in 1 to 10               # a range, both ends included
+each key, value in dictionary   # two names unpack each item
+match weapon
+    "sword" then ...
+    "bow", "crossbow" then ...
+    1 to 5 then ...
+    else ...
 while condition
     ...
 break / continue
 
 # ---- functions and types
-define name, p1, p2
+define name, p1, p2 = 10        # p2 has a default value
     return p1 + p2
 name(1, 2)    name(p2=2, p1=1)
 f = define p

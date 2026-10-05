@@ -187,6 +187,11 @@ fn expr_tokens(e: &Expr, out: &mut Vec<String>) {
             out.push(t("pop"));
             expr_tokens(x, out);
         }
+        Expr::Range(a, b) => {
+            expr_tokens(a, out);
+            out.push(t("to"));
+            expr_tokens(b, out);
+        }
     }
 }
 
@@ -195,7 +200,7 @@ fn precedence(op: crate::ast::Op) -> u8 {
     match op {
         Or => 1,
         And => 2,
-        Eq | Ne | Lt | Gt | Le | Ge => 3,
+        Eq | Ne | Lt | Gt | Le | Ge | In => 3,
         BitOr | BitXor | BitAnd | Shl | Shr => 4,
         Add | Sub => 5,
         Mul | Div | Rem => 6,
@@ -243,6 +248,7 @@ pub fn code(e: &Expr) -> String {
         Expr::Spawn { prefab, .. } => format!("spawn {}", code(prefab)),
         Expr::Load(x) => format!("load {}", code(x)),
         Expr::Pop(x) => format!("pop {}", code(x)),
+        Expr::Range(a, b) => format!("{} to {}", code(a), code(b)),
     }
 }
 

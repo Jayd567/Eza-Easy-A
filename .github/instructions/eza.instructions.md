@@ -19,7 +19,12 @@ Files ending in `.eza` are written in **Eza**, its own language (run with `eza f
 | `def __init__(self):` | `define setup` inside the `data` block |
 | `this.hp` | `self.hp` |
 | `for x in items:` / `for (...)` | `each x in items` |
-| `for i in range(10):` | `each i in 10` (0 to 9) |
+| `for i in range(10):` | `each i in 10` (0 to 9), or `each i in 1 to 10` (1 to 10, both included) |
+| `for k, v in d.items():` | `each k, v in d` |
+| `switch` / `match x:` + `case 1:` | `match x` then indented `1 then ...`, `2, 3 then ...`, `else ...` |
+| `x if cond else y`, `cond ? a : b` | an `if` / `else` block (Eza has no inline if) |
+| `a ?? b`, `a \|\| b` | `a or b` (gives the first value that counts as true) |
+| `x in list` / `list.includes(x)` | `x in list` (also text, dictionary keys, `x in 1 to 10`) |
 | `elif` / `else:` | `else if` / `else` (no colons anywhere) |
 | `None`, `null`, `True`, `False` | `none`, `true`, `false` |
 | `import x` / `from x import y` | `use "x.eza"` (names reached as `x.name`), or `include "x.eza"` |
@@ -55,10 +60,21 @@ while score < 100
     change score by 1
     if score == 50 then break   # continue skips to the next round
 
-define heal, target, amount    # parameters after the name, separated by commas
+define heal, target, amount = 10   # parameters after the name; amount has a default
     return target + amount
 heal(5, 2)
 heal(amount=2, target=5)      # by name
+
+x, y = hero.position           # several names from one list
+change x, y to [y, x]
+name = saved or "Guest"        # or gives a default
+if "key" in inventory then print("open")
+
+match weapon
+    "sword" then print("slash")
+    "bow", "crossbow" then print("shoot")
+    1 to 5 then print("a number from 1 to 5")
+    else print("bonk")
 
 double = n -> n * 2            # short function
 big = nums.filter(n -> n > 3)

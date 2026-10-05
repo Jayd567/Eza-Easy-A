@@ -1,0 +1,60 @@
+# match, in, ranges with `to`, default values, several names at once, and `or` for defaults.
+# Run with:  eza run examples/choices.eza      Test with:  eza test examples/choices.eza
+
+define attack, weapon, bonus = 0
+    match weapon
+        "sword" then return 10 + bonus
+        "bow", "crossbow" then return 6 + bonus
+        else return 1 + bonus
+
+define health_word, hp
+    match hp
+        0 then return "defeated"
+        1 to 30 then return "badly hurt"
+        31 to 99 then return "hurt"
+        else return "fine"
+
+print("sword hits for", attack("sword"), "- with a bonus", attack("sword", bonus=5))
+print("stick hits for", attack("stick"))
+each hp in [0, 12, 75, 100]
+    print(hp, "hp:", health_word(hp))
+
+inventory = ["key", "map", "torch"]
+if "key" in inventory
+    print("You unlock the door.")
+if not "rope" in inventory
+    print("No rope - better not climb.")
+
+each level in 1 to 3
+    print("Level", level)
+
+x, y = [120, 40]
+change x, y to [y, x]
+print("swapped:", x, y)
+
+high_scores = {ada: 30, bo: 25}
+each name, score in high_scores
+    print(name, "scored", score)
+
+saved_name = none
+player = saved_name or "Guest"
+print("Welcome,", player)
+
+test "match picks the first choice that fits"
+    expect attack("bow") == 6
+    expect attack("crossbow", 1) == 7
+    expect health_word(30) == "badly hurt"
+    expect health_word(31) == "hurt"
+
+test "in and to"
+    expect "map" in inventory
+    expect 12.5 in 1 to 50
+    expect not 51 in 1 to 50
+    expect 1 to 4 == [1, 2, 3, 4]
+    expect 3 to 1 == [3, 2, 1]
+
+test "several names and defaults"
+    a, b = [1, 2]
+    expect a + b == 3
+    expect (none or "x") == "x"
+    expect (0 or 5) == 5

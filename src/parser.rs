@@ -6,6 +6,10 @@ use std::rc::Rc;
 pub struct Parser {
     t: Vec<Token>,
     p: usize,
+    /// `a to b` makes a range, except right before `push x to list` / `save x to "file"`
+    no_range: bool,
+    /// numbers the hidden names `match` makes
+    uid: usize,
 }
 
 fn describe(t: &Tok) -> String {
@@ -53,8 +57,14 @@ fn check_purity(body: &[Stmt], shadow: &str, locals: &mut Vec<String>) -> R<()> 
                 }
             }
             StmtKind::Each(v, _, b) => {
-                locals.push(v.clone());
+                locals.extend(each_names(v).into_iter().map(String::from));
                 check_purity(b, shadow, locals)?;
+            }
+            StmtKind::Unpack { names, create: true, .. } => locals.extend(names.iter().cloned()),
+            StmtKind::Unpack { names, create: false, .. } => {
+                if let Some(root) = names.iter().find(|n| *n != shadow && !locals.contains(n)) {
+                    return Err(EzaError::syntax(s.line, format!("Cannot modify global variable '{}' inside an isolated simulation block.", root)));
+                }
             }
             StmtKind::While(_, b) | StmtKind::Persist { body: b, .. } => check_purity(b, shadow, locals)?,
             StmtKind::Save { .. } => {
@@ -152,7 +162,7 @@ fn interpolate(s: String, line: usize) -> R<Expr> {
 
 impl Parser {
     pub fn new(t: Vec<Token>) -> Self {
-        Parser { t, p: 0 }
+        Parser { t, p: 0, no_range: false, uid: 0 }
     }
     fn peek(&self) -> &Tok {
         &self.t[self.p].tok
@@ -343,7 +353,12 @@ impl Parser {
             }
             "each" => {
                 self.next();
-                let v = self.ident()?;
+                // each item in list   /   each name, score in high_scores (unpacks each item)
+                let mut names = vec![self.ident()?];
+                while self.eat_sym(",") {
+                    names.push(self.ident()?);
+                }
+                let v = names.join(", ");
                 self.expect_kw("in")?;
                 let e = self.expr()?;
                 StmtKind::Each(v, e, self.block()?)
@@ -357,16 +372,16 @@ impl Parser {
                 self.next();
                 let name = self.ident()?;
                 // define heal, target, amount   or   define heal(target, amount)
-                let params = if self.eat_sym("(") {
-                    let p = self.params()?;
+                let (params, defaults) = if self.eat_sym("(") {
+                    let p = self.params_with_defaults()?;
                     self.expect_sym(")")?;
                     p
                 } else {
                     self.eat_sym(",");
-                    self.params()?
+                    self.params_with_defaults()?
                 };
                 let body = Rc::new(self.block()?);
-                StmtKind::Define(Rc::new(FuncDef::new(name, params, body).at(line)))
+                StmtKind::Define(Rc::new(FuncDef::new(name, params, body).at(line).with_defaults(defaults)))
             }
             // other languages' `class` is Eza's `data` (fields, functions with self, from, super)
             "class" if is_decl && matches!(self.peek_n(1), Tok::Ident(_)) => {
@@ -454,6 +469,11 @@ impl Parser {
                     return Ok(Stmt { line, kind: StmtKind::OnTouch { a: e, b, names, start, body: Rc::new(self.block()?) } });
                 }
                 StmtKind::On(e, Rc::new(self.block()?))
+            }
+            "match" if !self.peek1_sym("=") && !self.peek1_sym("(") && !self.peek1_sym(".") => self.match_stmt(line)?,
+            _ if self.unpack_ahead("=").is_some() => {
+                let names = self.unpack_names("=")?;
+                StmtKind::Unpack { names, value: self.expr()?, create: true }
             }
             // print "hi", score   (brackets are optional: print("hi") works too)
             "print" if !self.peek1_sym("(") && !self.peek1_sym("=") && !self.peek1_sym(".") && !matches!(self.peek_n(1), Tok::Newline | Tok::Eof | Tok::Dedent) => {
@@ -594,6 +614,11 @@ impl Parser {
         Ok(match kw.as_str() {
             "change" if !self.peek1_sym("=") => {
                 self.next();
+                // change a, b to [b, a]
+                if self.unpack_ahead("to").is_some() {
+                    let names = self.unpack_names("to")?;
+                    return Ok(StmtKind::Unpack { names, value: self.expr()?, create: false });
+                }
                 let target = self.postfix()?;
                 if root_name(&target).is_none() {
                     return self.err("change needs a variable, like: change score by 10");
@@ -675,12 +700,12 @@ impl Parser {
             "save" | "append" if !self.peek1_sym("=") && !self.peek1_sym("(") => {
                 let append = kw == "append";
                 self.next();
-                let value = self.expr()?;
+                let value = self.expr_before_to()?;
                 self.expect_kw("to")?;
                 let path = self.expr()?;
                 StmtKind::Save { value, path, append }
             }
-            "expect" if !self.peek1_sym("=") && !self.peek1_sym("(") => {
+            "expect" if !self.peek1_sym("=") => {
                 self.next();
                 StmtKind::Expect(self.expr()?)
             }
@@ -732,7 +757,7 @@ impl Parser {
             }
             "push" if !self.peek1_sym("=") && !self.peek1_sym("(") => {
                 self.next();
-                let value = self.expr()?;
+                let value = self.expr_before_to()?;
                 self.expect_kw("to")?;
                 let target = self.postfix()?;
                 if root_name(&target).is_none() {
@@ -1050,17 +1075,164 @@ impl Parser {
         }
     }
     fn cmp(&mut self) -> R<Expr> {
-        let mut l = self.bor()?;
+        let mut l = self.range()?;
         loop {
             let op = match self.peek() {
                 Tok::Sym(s) if ["==", "!=", "<", ">", "<=", ">="].contains(s) => *s,
+                Tok::Ident(w) if w == "in" => "in",
                 _ => break,
             };
             self.next();
-            let r = self.bor()?;
+            let r = self.range()?;
             l = Expr::Binary(Op::from_str(op).expect("known operator"), Box::new(l), Box::new(r));
         }
         Ok(l)
+    }
+    /// 1 to 10
+    fn range(&mut self) -> R<Expr> {
+        let l = self.bor()?;
+        if !self.no_range && self.is_kw("to") && !matches!(self.peek_n(1), Tok::Ident(w) if w == "beginning") {
+            self.next();
+            let r = self.bor()?;
+            return Ok(Expr::Range(Box::new(l), Box::new(r)));
+        }
+        Ok(l)
+    }
+    /// Inside ( ), [ ] and { }, `to` makes a range again.
+    fn inner_expr(&mut self) -> R<Expr> {
+        let before = std::mem::replace(&mut self.no_range, false);
+        let r = self.expr();
+        self.no_range = before;
+        r
+    }
+    /// The value in `push x to list` / `save x to "file"`, where `to` isn't a range.
+    fn expr_before_to(&mut self) -> R<Expr> {
+        let before = std::mem::replace(&mut self.no_range, true);
+        let r = self.expr();
+        self.no_range = before;
+        r
+    }
+    /// `a, b, c =` (or `to`) coming up: the number of tokens before the `=`.
+    fn unpack_ahead(&self, end: &str) -> Option<usize> {
+        let mut k = 0;
+        let mut names = 0;
+        loop {
+            if !matches!(self.peek_n(k), Tok::Ident(_)) {
+                return None;
+            }
+            names += 1;
+            k += 1;
+            match self.peek_n(k) {
+                Tok::Sym(",") => k += 1,
+                Tok::Sym(s) if *s == end && names >= 2 => return Some(k),
+                Tok::Ident(w) if w == end && names >= 2 => return Some(k),
+                _ => return None,
+            }
+        }
+    }
+    fn unpack_names(&mut self, end: &str) -> R<Vec<String>> {
+        let mut names = vec![self.ident()?];
+        while self.eat_sym(",") {
+            names.push(self.ident()?);
+        }
+        if !self.eat_sym(end) {
+            self.expect_kw(end)?;
+        }
+        Ok(names)
+    }
+    /// Parameters, some with a default value: `name, greeting = "Hello"`.
+    fn params_with_defaults(&mut self) -> R<(Vec<String>, Vec<Option<Expr>>)> {
+        let (mut names, mut defaults) = (vec![], vec![]);
+        while let Tok::Ident(s) = self.peek() {
+            if s == "then" {
+                break;
+            }
+            let name = self.ident()?;
+            let default = if self.eat_sym("=") {
+                Some(self.expr()?)
+            } else {
+                if defaults.iter().any(|d: &Option<Expr>| d.is_some()) {
+                    return self.err_prev(format!(
+                        "'{}' needs a default value too: parameters with a default go after the ones without one",
+                        name
+                    ));
+                }
+                None
+            };
+            names.push(name);
+            defaults.push(default);
+            if !self.eat_sym(",") {
+                break;
+            }
+        }
+        Ok((names, defaults))
+    }
+    /// match weapon
+    ///     "sword" then ...
+    ///     "bow", "crossbow" then ...
+    ///     1 to 5 then ...
+    ///     else ...
+    /// becomes an if / else if chain (the value is worked out once).
+    fn match_stmt(&mut self, line: usize) -> R<StmtKind> {
+        self.next();
+        let subject = self.expr()?;
+        self.expect_newline()?;
+        if !matches!(self.peek(), Tok::Indent) {
+            return self.err("match needs indented choices under it, like:   \"sword\" then print(\"slash\")");
+        }
+        self.next();
+        // a plain name can be compared directly; anything else is worked out once, into a hidden name
+        let simple = root_name(&subject).is_some();
+        let (value, setup) = if simple {
+            (subject.clone(), None)
+        } else {
+            self.uid += 1;
+            let hidden = format!("_match{}", self.uid);
+            (Expr::Ident(hidden.clone()), Some(Stmt { line, kind: StmtKind::Assign(hidden, subject) }))
+        };
+        let (mut arms, mut els) = (vec![], None);
+        while !matches!(self.peek(), Tok::Dedent | Tok::Eof) {
+            if matches!(self.peek(), Tok::Newline) {
+                self.next();
+                continue;
+            }
+            if self.eat_kw("else") {
+                els = Some(self.block()?);
+                continue;
+            }
+            if els.is_some() {
+                return self.err("'else' has to be the last choice in a match");
+            }
+            let mut cond: Option<Expr> = None;
+            loop {
+                let pat = self.expr()?;
+                let test = match pat {
+                    Expr::Range(..) => Expr::Binary(Op::In, Box::new(value.clone()), Box::new(pat)),
+                    other => Expr::Binary(Op::Eq, Box::new(value.clone()), Box::new(other)),
+                };
+                cond = Some(match cond {
+                    Some(c) => Expr::Binary(Op::Or, Box::new(c), Box::new(test)),
+                    None => test,
+                });
+                if !self.eat_sym(",") {
+                    break;
+                }
+            }
+            if !self.is_kw("then") && !matches!(self.peek(), Tok::Newline) {
+                return self.err(format!("expected 'then' or an indented block after the choice, found {}", describe(self.peek())));
+            }
+            arms.push((cond.unwrap(), self.block()?));
+        }
+        self.eat_dedent();
+        if arms.is_empty() {
+            return self.err_prev("match needs at least one choice, like:   \"sword\" then print(\"slash\")");
+        }
+        let chain = StmtKind::If(arms, els);
+        Ok(match setup {
+            None => chain,
+            // `if true` keeps the hidden name inside its own block
+            Some(assign) => StmtKind::If(vec![(Expr::Bool(true), vec![assign, Stmt { line, kind: chain }])], None),
+        })
     }
     fn bin_level(&mut self, ops: &[&str], next: fn(&mut Self) -> R<Expr>) -> R<Expr> {
         let mut l = next(self)?;
@@ -1140,7 +1312,7 @@ impl Parser {
                     } else {
                         None
                     };
-                    args.push(Arg { name, value: self.expr()? });
+                    args.push(Arg { name, value: self.inner_expr()? });
                     if !self.eat_sym(",") {
                         break;
                     }
@@ -1148,7 +1320,7 @@ impl Parser {
                 self.expect_sym(")")?;
                 e = Expr::Call(Box::new(e), args);
             } else if self.eat_sym("[") {
-                let idx = self.expr()?;
+                let idx = self.inner_expr()?;
                 self.expect_sym("]")?;
                 e = Expr::Index(Box::new(e), Box::new(idx));
             } else {
@@ -1219,7 +1391,7 @@ impl Parser {
                 _ => Expr::Ident(s),
             },
             Tok::Sym("(") => {
-                let e = self.expr()?;
+                let e = self.inner_expr()?;
                 self.expect_sym(")")?;
                 e
             }
@@ -1232,7 +1404,7 @@ impl Parser {
                         t => return Err(EzaError::syntax(line, format!("a dictionary key must be a name or text, found {}", describe(&t)))),
                     };
                     self.expect_sym(":")?;
-                    items.push((key, self.expr()?));
+                    items.push((key, self.inner_expr()?));
                     if !self.eat_sym(",") {
                         break;
                     }
@@ -1243,7 +1415,7 @@ impl Parser {
             Tok::Sym("[") => {
                 let mut items = vec![];
                 while !self.is_sym("]") {
-                    items.push(self.expr()?);
+                    items.push(self.inner_expr()?);
                     if !self.eat_sym(",") {
                         break;
                     }

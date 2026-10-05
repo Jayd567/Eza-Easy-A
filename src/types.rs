@@ -142,6 +142,7 @@ fn lambdas<'a>(e: &'a Expr, out: &mut Vec<&'a Rc<FuncDef>>) {
 fn exprs(s: &Stmt) -> Vec<&Expr> {
     match &s.kind {
         StmtKind::Assign(_, e) | StmtKind::Expr(e) | StmtKind::Destroy(e) | StmtKind::Expect(e) | StmtKind::Param(_, e) | StmtKind::Go(e) => vec![e],
+        StmtKind::Unpack { value, .. } => vec![value],
         StmtKind::Change(a, _, b) | StmtKind::Push(a, b) => vec![a, b],
         StmtKind::If(arms, _) => arms.iter().map(|(c, _)| c).collect(),
         StmtKind::Each(_, e, _) | StmtKind::While(e, _) | StmtKind::On(e, _) | StmtKind::Mimic(_, e, _) => vec![e],
@@ -246,7 +247,17 @@ pub fn check<'p>(progs: &'p [(String, Vec<Stmt>)]) -> Vec<EzaError> {
                 }
                 _ => {}
             },
-            StmtKind::Each(v, e, _) => put(&mut facts, v, Ev::Item(e)),
+            StmtKind::Each(v, e, _) if !v.contains(',') => put(&mut facts, v, Ev::Item(e)),
+            StmtKind::Each(v, _, _) => {
+                for n in each_names(v) {
+                    put(&mut facts, n, Ev::Fixed(Ty::Unknown));
+                }
+            }
+            StmtKind::Unpack { names, .. } => {
+                for n in names {
+                    put(&mut facts, n, Ev::Fixed(Ty::Unknown));
+                }
+            }
             StmtKind::Define(d) => {
                 put(&mut facts, &d.name, Ev::Fixed(Ty::Func));
                 facts.funcs.entry(d.name.clone()).or_default().push(d.clone());
@@ -439,7 +450,12 @@ impl<'a> Typer<'a> {
             Expr::Binary(op, l, r) => {
                 let (a, b) = (self.ty(l), self.ty(r));
                 match op {
-                    Op::And | Op::Or | Op::Eq | Op::Ne | Op::Lt | Op::Gt | Op::Le | Op::Ge => Bool,
+                    // `a or b` gives one of the two values
+                    Op::And | Op::Or => match (a, b) {
+                        (Some(Bool), Some(Bool)) => Bool,
+                        (x, y) => return join(x, y),
+                    },
+                    Op::Eq | Op::Ne | Op::Lt | Op::Gt | Op::Le | Op::Ge | Op::In => Bool,
                     _ => {
                         let (a, b) = (a?, b?);
                         binary_result(*op, &a, &b).unwrap_or(Unknown)
@@ -475,6 +491,7 @@ impl<'a> Typer<'a> {
                 Str => Str,
                 _ => Unknown,
             },
+            Expr::Range(..) => List,
             Expr::Spawn { .. } | Expr::Load(_) | Expr::Pop(_) => Unknown,
         })
     }
@@ -507,6 +524,17 @@ impl<'a> Typer<'a> {
         for e in exprs(s) {
             self.check(e);
         }
+        if let StmtKind::Unpack { names, value: list @ Expr::List(items), .. } = &s.kind {
+            if items.len() != names.len() {
+                self.report(
+                    format!("{} needs a list of {} things, but this one has {}", names.join(", "), names.len(), items.len()),
+                    list,
+                    vec![],
+                    vec![],
+                    Some("give one value for each name".into()),
+                );
+            }
+        }
         if let StmtKind::Each(_, e, _) = &s.kind {
             let t = self.known(e);
             if matches!(t, Ty::Bool | Ty::Nothing | Ty::Color | Ty::Func | Ty::Obj(_) | Ty::Type(_) | Ty::Prefab) {
@@ -530,6 +558,20 @@ impl<'a> Typer<'a> {
             Expr::Binary(op, l, r) => {
                 let (a, b) = (self.check(l), self.check(r));
                 if !a.known() || !b.known() || matches!(op, Op::And | Op::Or | Op::Eq | Op::Ne) {
+                    return self.known(e);
+                }
+                if *op == Op::In {
+                    if matches!(b, Ty::Num | Ty::Bool | Ty::Nothing | Ty::Color | Ty::Func) {
+                        let notes = self.origin(r).into_iter().collect();
+                        self.report(
+                            format!("'in' looks inside a list, text, dictionary or a range like 1 to 10, but {} is {}", crate::diagnose::code(r), b.describe()),
+                            r,
+                            vec![],
+                            notes,
+                            Some(format!("to check a number is between two others:   {} in 1 to 10", crate::diagnose::code(l))),
+                        );
+                        return Ty::Unknown;
+                    }
                     return self.known(e);
                 }
                 let ok = if op.is_comparison() {
@@ -707,7 +749,9 @@ impl<'a> Typer<'a> {
                     if let Some(args) = args {
                         let positional = args.iter().filter(|a| a.name.is_none()).count();
                         let named_ok = args.iter().all(|a| a.name.as_ref().map_or(true, |n| f.params.contains(n)));
-                        let covered = f.params.iter().enumerate().all(|(i, p)| i < positional || args.iter().any(|a| a.name.as_deref() == Some(p)));
+                        let covered = f.params.iter().enumerate().all(|(i, p)| {
+                            i < positional || args.iter().any(|a| a.name.as_deref() == Some(p)) || matches!(f.defaults.get(i), Some(Some(_)))
+                        });
                         if positional > f.params.len() || !named_ok || !covered {
                             let sig = if f.params.is_empty() { format!("{}.{}()", what, name) } else { format!("{}.{}({})", what, name, f.params.join(", ")) };
                             self.report(
@@ -719,7 +763,7 @@ impl<'a> Typer<'a> {
                             );
                             return false;
                         }
-                    } else if !f.params.is_empty() {
+                    } else if f.required() > 0 {
                         self.report(
                             format!("{}.{} needs {} argument(s)", ty, name, f.params.len()),
                             at,

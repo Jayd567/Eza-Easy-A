@@ -23,6 +23,8 @@ pub enum Expr {
     Load(Box<Expr>),
     /// pop stack (takes the top item; queues give the front item)
     Pop(Box<Expr>),
+    /// 1 to 10: the whole numbers from 1 to 10 (both included); `x in 1 to 10` checks between
+    Range(Box<Expr>, Box<Expr>),
 }
 
 /// A two-sided operator, worked out once when the script is read (not compared as text each time).
@@ -46,6 +48,8 @@ pub enum Op {
     BitXor,
     Shl,
     Shr,
+    /// "key" in inventory
+    In,
 }
 
 impl Op {
@@ -69,6 +73,7 @@ impl Op {
             "^" => Op::BitXor,
             "<<" => Op::Shl,
             ">>" => Op::Shr,
+            "in" => Op::In,
             _ => return None,
         })
     }
@@ -92,6 +97,7 @@ impl Op {
             Op::BitXor => "^",
             Op::Shl => "<<",
             Op::Shr => ">>",
+            Op::In => "in",
         }
     }
     pub fn is_comparison(self) -> bool {
@@ -116,13 +122,24 @@ pub struct FuncDef {
     pub param_names: Vec<Rc<str>>,
     /// the line of its `define` (0 if unknown)
     pub line: usize,
+    /// default values: `define greet, name, greeting = "Hello"` (one entry per parameter)
+    pub defaults: Vec<Option<Expr>>,
 }
 
 impl FuncDef {
     pub fn new(name: String, params: Vec<String>, body: Rc<Vec<Stmt>>) -> Self {
         let has_wait = block_has_wait(&body);
         let param_names = params.iter().map(|p| Rc::from(p.as_str())).collect();
-        FuncDef { name, params, body, has_wait, param_names, line: 0 }
+        let defaults = vec![None; params.len()];
+        FuncDef { name, params, body, has_wait, param_names, line: 0, defaults }
+    }
+    pub fn with_defaults(mut self, defaults: Vec<Option<Expr>>) -> Self {
+        self.defaults = defaults;
+        self
+    }
+    /// How many arguments a call must give (the ones without a default value).
+    pub fn required(&self) -> usize {
+        self.defaults.iter().filter(|d| d.is_none()).count()
     }
     pub fn at(mut self, line: usize) -> Self {
         self.line = line;
@@ -230,6 +247,8 @@ pub enum StmtKind {
     Go(Expr),
     /// use "enemies.eza" [as foes] - load a module; its names are reached as `foes.name`
     Use { path: String, alias: String },
+    /// x, y = position (create: true)   /   change x, y to [y, x] (create: false)
+    Unpack { names: Vec<String>, value: Expr, create: bool },
 }
 
 impl Expr {
@@ -285,4 +304,9 @@ impl Stmt {
         };
         Stmt { line: self.line, kind }
     }
+}
+
+/// `each name, score in high_scores`: the loop's names (one, or several to unpack each item).
+pub fn each_names(var: &str) -> Vec<&str> {
+    var.split(',').map(|n| n.trim()).filter(|n| !n.is_empty()).collect()
 }

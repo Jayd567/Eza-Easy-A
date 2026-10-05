@@ -883,6 +883,26 @@ impl Interp {
                 scope.insert(name, self.new_var(v));
             }
             StmtKind::Change(t, mode, e) => self.change(t, *mode, e, scope)?,
+            StmtKind::Unpack { names, value, create } => {
+                let v = deref_val(self.eval(value, scope)?);
+                let items = self.unpack(&v, names)?;
+                if *create {
+                    if let Some(n) = names.iter().find(|n| scope.has_local(n)) {
+                        return self.rt(format!("'{0}' already exists - use 'change {0} to ...' to update it", n));
+                    }
+                    for (n, item) in names.iter().zip(items) {
+                        scope.insert(n, self.new_var(item));
+                    }
+                } else {
+                    // the same as  change a to ...  for each name (history, rewind and mimic rules included)
+                    let tmp = Scope::new(Some(scope.clone()));
+                    tmp.insert("_unpacked", self.new_var(Value::list(items)));
+                    for (i, n) in names.iter().enumerate() {
+                        let item = Expr::Index(Box::new(Expr::Ident("_unpacked".into())), Box::new(Expr::Num(i as f64)));
+                        self.change(&Expr::Ident(n.clone()), ChangeMode::To, &item, &tmp)?;
+                    }
+                }
+            }
             StmtKind::Expr(e) => {
                 self.eval(e, scope)?;
             }
@@ -895,6 +915,36 @@ impl Interp {
                 if let Some(b) = els {
                     return self.exec_child(b, scope);
                 }
+            }
+            StmtKind::Each(name, e, body) if name.contains(',') => {
+                let names: Vec<String> = each_names(name).into_iter().map(String::from).collect();
+                let src = self.eval(e, scope)?;
+                let items = self.each_items(src, true)?;
+                self.each_depth += 1;
+                let mut result = Ok(Flow::Normal);
+                for item in items {
+                    let sc = Scope::new(Some(scope.clone()));
+                    let parts = match self.unpack(&deref_val(item), &names) {
+                        Ok(p) => p,
+                        Err(err) => {
+                            result = Err(err);
+                            break;
+                        }
+                    };
+                    for (n, part) in names.iter().zip(parts) {
+                        sc.insert(n, self.new_var(part));
+                    }
+                    match self.exec_block(body, &sc) {
+                        Ok(Flow::Normal | Flow::Continue) => {}
+                        Ok(Flow::Break) => break,
+                        other => {
+                            result = other;
+                            break;
+                        }
+                    }
+                }
+                self.each_depth -= 1;
+                return result;
             }
             StmtKind::Each(name, e, body) => {
                 let src = self.eval(e, scope)?;
@@ -1940,7 +1990,15 @@ impl Interp {
                         Act::Pop
                     } else {
                         let sc = Scope::new(Some(scope.clone()));
-                        sc.insert(var.as_str(), self.new_var(items[*i].clone()));
+                        if var.contains(',') {
+                            let names: Vec<String> = each_names(var).into_iter().map(String::from).collect();
+                            let parts = self.unpack(&deref_val(items[*i].clone()), &names)?;
+                            for (n, part) in names.iter().zip(parts) {
+                                sc.insert(n, self.new_var(part));
+                            }
+                        } else {
+                            sc.insert(var.as_str(), self.new_var(items[*i].clone()));
+                        }
                         *i += 1;
                         Act::Push(Frame::Block { stmts: body.clone(), idx: 0, scope: sc })
                     }
@@ -1989,6 +2047,7 @@ impl Interp {
                         }
                         StmtKind::Each(name, e, body) if block_has_wait(body) => {
                             let items: Vec<Value> = match self.eval(e, &scope)? {
+                                src if name.contains(',') => self.each_items(src, true)?,
                                 Value::List(l) => (*l).clone(),
                                 Value::Num(n) => (0..n.max(0.0) as i64).map(|i| Value::Num(i as f64)).collect(),
                                 Value::Str(s) => s.chars().map(|c| Value::Str(c.to_string())).collect(),
@@ -2455,6 +2514,39 @@ impl Interp {
         var.borrow_mut().set(Value::obj(fin));
         self.shadows.push(job.shadow);
         Ok(())
+    }
+
+    /// `a, b = value`: the parts, one per name.
+    fn unpack(&self, v: &Value, names: &[String]) -> R<Vec<Value>> {
+        let what = names.join(", ");
+        match v {
+            Value::List(items) if items.len() == names.len() => Ok((**items).clone()),
+            Value::List(items) => self.rt(format!(
+                "{} needs a list of {} things, but this one has {}",
+                what,
+                names.len(),
+                items.len()
+            )),
+            other => self.rt(format!("{} needs a list of {} things to unpack, but got {}", what, names.len(), other.type_name())),
+        }
+    }
+
+    /// What `each` goes through. With several names, a dictionary gives [key, value] pairs.
+    fn each_items(&self, src: Value, pairs: bool) -> R<Vec<Value>> {
+        Ok(match src {
+            Value::List(l) => (*l).clone(),
+            Value::Num(n) => (0..n.max(0.0) as i64).map(|i| Value::Num(i as f64)).collect(),
+            Value::Str(s) => s.chars().map(|c| Value::Str(c.to_string())).collect(),
+            Value::Obj(o) if o.type_name == "dict" && pairs => {
+                o.fields.iter().map(|(k, v)| Value::list(vec![Value::Str(k.clone()), v.clone()])).collect()
+            }
+            Value::Obj(o) if o.type_name == "dict" => o.fields.iter().map(|(k, _)| Value::Str(k.clone())).collect(),
+            Value::Obj(o) if o.type_name == "stack" || o.type_name == "queue" => match o.get("items") {
+                Some(Value::List(l)) => (**l).clone(),
+                _ => vec![],
+            },
+            v => return self.rt(format!("can't loop over {}", v.type_name())),
+        })
     }
 
     /// Advance one frame: clear last frame's shadows, age persist layers, fire `on` handlers.
@@ -3117,19 +3209,63 @@ impl Interp {
                     },
                 }
             }
+            // `a and b` / `a or b` give back one of the two values, so  name = saved or "Guest"  works
             Expr::Binary(Op::And, l, r) => {
                 let a = self.eval(l, scope)?;
                 if !a.truthy() {
-                    return Ok(Value::Bool(false));
+                    return Ok(a);
                 }
-                Value::Bool(self.eval(r, scope)?.truthy())
+                self.eval(r, scope)?
             }
             Expr::Binary(Op::Or, l, r) => {
                 let a = self.eval(l, scope)?;
                 if a.truthy() {
-                    return Ok(Value::Bool(true));
+                    return Ok(a);
                 }
-                Value::Bool(self.eval(r, scope)?.truthy())
+                self.eval(r, scope)?
+            }
+            Expr::Binary(Op::In, l, r) => {
+                let x = self.eval(l, scope)?;
+                if let Expr::Range(a, b) = &**r {
+                    // hp in 1 to 50: between the two, both included (any number, not just whole ones)
+                    let (a, b) = (self.eval(a, scope)?, self.eval(b, scope)?);
+                    let (Value::Num(a), Value::Num(b), Value::Num(n)) = (&a, &b, &x) else {
+                        return self.rt(format!("'in ... to ...' needs numbers, but this checks {} in {} to {}", x.type_name(), a.type_name(), b.type_name()));
+                    };
+                    return Ok(Value::Bool(*n >= a.min(*b) && *n <= a.max(*b)));
+                }
+                let within = deref_val(self.eval(r, scope)?);
+                Value::Bool(match &within {
+                    Value::List(items) => items.iter().any(|v| equals(v, &x)),
+                    Value::Str(s) => match &x {
+                        Value::Str(part) => s.contains(part.as_str()),
+                        other => return self.rt(format!("'in' on text looks for text inside it, but this is {}", other.type_name())),
+                    },
+                    Value::Obj(o) if o.type_name == "dict" => o.get(&key_str(&x)).is_some(),
+                    Value::Obj(o) if o.type_name == "stack" || o.type_name == "queue" => {
+                        matches!(o.get("items"), Some(Value::List(items)) if items.iter().any(|v| equals(v, &x)))
+                    }
+                    other => {
+                        return self.rt(format!(
+                            "'in' looks inside a list, text, dictionary or a range like 1 to 10, but {} is {}",
+                            crate::diagnose::code(r),
+                            other.type_name()
+                        ))
+                    }
+                })
+            }
+            Expr::Range(a, b) => {
+                let (a, b) = (self.eval(a, scope)?, self.eval(b, scope)?);
+                let (Value::Num(a), Value::Num(b)) = (&a, &b) else {
+                    return self.rt(format!("'to' makes a range of numbers, like 1 to 10, but got {} and {}", a.type_name(), b.type_name()));
+                };
+                let (a, b) = (*a, *b);
+                let count = (b - a).abs().floor() as usize + 1;
+                if count > 10_000_000 {
+                    return self.rt(format!("{} to {} would be {} numbers - that's too many", fmt_num(a), fmt_num(b), count));
+                }
+                let step = if b >= a { 1.0 } else { -1.0 };
+                Value::list((0..count).map(|i| Value::Num(a + step * i as f64)).collect())
             }
             Expr::Binary(op, l, r) => {
                 let a = self.eval(l, scope)?;
@@ -3488,6 +3624,10 @@ impl Interp {
                 }
             } else if let Some((_, v)) = named.iter().find(|(n, _)| **n == **p) {
                 sc.insert_rc(p.clone(), self.new_var(v.clone()));
+            } else if let Some(Some(d)) = def.defaults.get(i) {
+                // its default value, worked out now (it can use the parameters before it)
+                let v = self.eval(d, &sc)?;
+                sc.insert_rc(p.clone(), self.new_var(v));
             } else {
                 return self.rt(format!("{} is missing the argument '{}'", def.name, p));
             }
