@@ -945,7 +945,7 @@ print(sword)             # Item(name: "Sword", weight: 3.5, equippable: true)
 - Properties you don't give keep their defaults.
 - Naming a property the type doesn't have is an error.
 - You can still add new properties later with `change sword.rarity to "epic"`.
-- `class` is another word for `data`, if you're used to Python: `class Item` works exactly the same.
+- Coming from Python or another language? `data` is Eza's **class**: fields, functions that use `self`, `setup` (like `__init__`), and `from` / `super` for building one type on another. Writing `class Item` gives a hint to write `data Item`.
 
 ### Functions inside a type
 
@@ -3001,7 +3001,7 @@ data Point
     x = 0
     y = 0
 pt = Point(1, 2)
-data Enemy                    # (or: class Enemy)
+data Enemy                    # Eza's classes
     hp = 100
     define setup              # runs on every new one
         ...

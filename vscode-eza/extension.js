@@ -19,7 +19,7 @@ const KEYWORDS = {
   step: 'Unit of time for rewind/persist (in the engine, one frame).',
   steps: 'Unit of time for rewind/persist (in the engine, one frame).',
   data: 'A type: `data Item` then indented `name = ""` fields, and optionally functions (`define use_it` - inside, `self` is the object). Create with `Item(name="Sword")`, call with `sword.use_it()`. `define setup` runs on every new one. `data Boss from Enemy` builds on another type.',
-  class: 'Another word for `data` (like Python): `class Enemy` then fields and `define` functions that use `self`. `class Boss from Enemy` builds on Enemy.',
+  class: 'Eza makes classes with `data`: `data Enemy` then fields and `define` functions that use `self`. `data Boss from Enemy` builds on Enemy.',
   from: '`data Boss from Enemy` - Boss gets all of Enemy\'s fields and functions, then adds or replaces some. Also `emit 30 from sparks`.',
   self: 'Inside a type\'s function: the object it was called on.  `change self.hp by -amount`',
   super: 'Inside a function of `data Boss from Enemy`: `super.take_damage(n)` runs Enemy\'s version on the same object.',

@@ -368,8 +368,17 @@ impl Parser {
                 let body = Rc::new(self.block()?);
                 StmtKind::Define(Rc::new(FuncDef::new(name, params, body).at(line)))
             }
-            // `class` is another word for `data`, for people coming from Python
-            "data" | "class" if is_decl && matches!(self.peek_n(1), Tok::Ident(_)) => {
+            // other languages' `class` is Eza's `data` (fields, functions with self, from, super)
+            "class" if is_decl && matches!(self.peek_n(1), Tok::Ident(_)) => {
+                let name = match self.peek_n(1) {
+                    Tok::Ident(n) => n.clone(),
+                    _ => String::new(),
+                };
+                let mut e = self.error_at(self.p, "Eza makes classes with the word data");
+                e.help.push(format!("write it as:   data {}", name));
+                return Err(e);
+            }
+            "data" if is_decl && matches!(self.peek_n(1), Tok::Ident(_)) => {
                 self.next();
                 let name = self.ident()?;
                 let parent = if self.eat_kw("from") { Some(self.ident()?) } else { None };

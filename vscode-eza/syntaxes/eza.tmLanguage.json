@@ -35,7 +35,7 @@
           "captures": { "1": { "name": "storage.type.function.eza" }, "2": { "name": "entity.name.function.eza" } }
         },
         {
-          "match": "\\b(data|class)\\s+([A-Za-z_]\\w*)",
+          "match": "\\b(data)\\s+([A-Za-z_]\\w*)",
           "captures": { "1": { "name": "storage.type.class.eza" }, "2": { "name": "entity.name.type.eza" } }
         },
         {
@@ -48,7 +48,7 @@
       "patterns": [
         { "match": "\\b(if|then|else|each|in|while|return|break|continue|attempt|handle|on|persist|for|until|mimic|tick|tween|over|ease|include|use|as|spawn|destroy|wait|at|seconds?|push|pop|load|save|append|test|expect|play|stop|emit|go|touches|stops|touching|trigger|event|into|every|frame)\\b", "name": "keyword.control.eza" },
         { "match": "\\b(rewind|change|to|by|beginning|steps?)\\b", "name": "keyword.other.eza" },
-        { "match": "\\b(define|data|class|from|param|scene|gui|prefab|stage|style|particles)\\b", "name": "storage.type.eza" },
+        { "match": "\\b(define|data|from|param|scene|gui|prefab|stage|style|particles)\\b", "name": "storage.type.eza" },
         { "match": "\\b(self|super)\\b", "name": "variable.language.eza" },
         { "match": "\\b(and|or|not)\\b", "name": "keyword.operator.logical.eza" },
         { "match": "->|==|!=|<=|>=|<<|>>|[+\\-*/%<>=&|^~]", "name": "keyword.operator.eza" }

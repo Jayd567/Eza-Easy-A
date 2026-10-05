@@ -533,8 +533,7 @@ fn syntax_hints(line: &str, msg: &str) -> Vec<String> {
         }
         "for" => out.push("loops in Eza:  each item in list   or   each i in 10   or   while condition".into()),
         "import" | "require" | "using" | "from" => out.push("to load another file:  use \"file.eza\"  (or  include \"file.eza\")".into()),
-        "class" | "data" if msg.contains("indented") => out.push("put the fields underneath, indented:  name = \"\"".into()),
-        "print" if !t.contains('(') => out.push(format!("print needs brackets:  print({})", t.trim_start_matches("print").trim())),
+        "data" if msg.contains("indented") => out.push("put the fields underneath, indented:  name = \"\"".into()),
         _ => {}
     }
     if words.contains(&"this") {
@@ -557,6 +556,7 @@ pub fn other_language_name(name: &str) -> Option<&'static str> {
         "string" | "toString" | "to_str" => "to turn something into text, use str(x)",
         "parseInt" | "parseFloat" | "float" | "Number" => "to turn text into a number, use num(x) (or int(x))",
         "var" | "let" | "const" => "just write the name: x = 5",
+        "class" => "Eza makes classes with data:  data Enemy",
         _ => return None,
     })
 }

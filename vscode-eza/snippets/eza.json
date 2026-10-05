@@ -11,7 +11,7 @@
       "\tdefine ${5:take_damage}, ${6:amount}",
       "\t\tchange self.$2 by -$6"
     ],
-    "description": "a type with fields and its own functions (a class)"
+    "description": "a type with fields and its own functions (Eza's classes are made with data)"
   },
   "use": {
     "prefix": "use",

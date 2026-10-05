@@ -1,4 +1,4 @@
-# Types with their own functions (classes). `class` works too, instead of `data`.
+# Types with their own functions: Eza makes classes with `data`.
 data Enemy
     name = ""
     hp = 100
