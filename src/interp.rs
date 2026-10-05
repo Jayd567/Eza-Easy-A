@@ -7,6 +7,9 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
+#[path = "interp_explain.rs"]
+mod explain;
+
 /// How many steps of history each variable (and the scene timeline) keeps.
 pub const HISTORY: usize = 1000;
 const MESHES: &[&str] = &["plane", "sphere", "cube", "cylinder", "cone", "torus", "mesh", "light", "camera"];
@@ -14,20 +17,42 @@ const SPRITE_KINDS: &[&str] = &["sprite", "tilemap"];
 const NOISES: &[&str] = &["simplex", "perlin", "worley", "value_noise", "noise"];
 const MAX_DEPTH: usize = 2000;
 
-/// A variable and its past values. The history is `first` followed by `later`, so a variable
-/// that never changes (most loop variables and function arguments) needs no extra memory.
+/// Where a value came from: the file, line and frame of the code that set it.
+#[derive(Clone, Copy, Default, PartialEq)]
+pub struct Origin {
+    pub line: u32,
+    /// an index into Interp::files
+    pub file: u16,
+    pub frame: u32,
+}
+
+/// A variable and its past values, each with the place in the code that set it. The history is
+/// `first` followed by `later`, so a variable that never changes (most loop variables and
+/// function arguments) needs no extra memory.
 pub struct Var {
     first: Value,
-    later: VecDeque<Value>,
+    first_at: Origin,
+    later: VecDeque<(Value, Origin)>,
     pub idx: usize,
     /// created inside a mimic block, so the purity guard lets it change
     pub sandbox: bool,
+    /// where this variable's value was copied from: a loop's list item (with its position), the
+    /// object a method was called on, ... (followed when explaining an error)
+    pub source: Option<(Rc<Source>, Option<usize>)>,
 }
 pub type VarRef = Rc<RefCell<Var>>;
 
+/// A place values get copied from, like the list an `each` loop walks through.
+pub struct Source {
+    pub var: VarRef,
+    pub path: Vec<PathEl>,
+    /// how the code wrote it, e.g. "enemies"
+    pub name: String,
+}
+
 impl Var {
-    fn new(v: Value, sandbox: bool) -> Var {
-        Var { first: v, later: VecDeque::new(), idx: 0, sandbox }
+    fn new(v: Value, sandbox: bool, at: Origin) -> Var {
+        Var { first: v, first_at: at, later: VecDeque::new(), idx: 0, sandbox, source: None }
     }
     fn len(&self) -> usize {
         self.later.len() + 1
@@ -36,7 +61,7 @@ impl Var {
         if self.idx == 0 {
             &self.first
         } else {
-            &self.later[self.idx - 1]
+            &self.later[self.idx - 1].0
         }
     }
     /// The current value, to change without making a new history step.
@@ -44,16 +69,29 @@ impl Var {
         if self.idx == 0 {
             &mut self.first
         } else {
-            &mut self.later[self.idx - 1]
+            &mut self.later[self.idx - 1].0
+        }
+    }
+    /// History step `i` (0 = when it was created), up to the step being shown now.
+    pub fn step(&self, i: usize) -> (&Value, Origin) {
+        if i == 0 {
+            (&self.first, self.first_at)
+        } else {
+            let (v, o) = &self.later[i - 1];
+            (v, *o)
         }
     }
     /// A new step: erases any rewound "future" and starts a new one from here.
     pub fn set(&mut self, v: Value) {
+        self.set_at(v, Origin::default());
+    }
+    pub fn set_at(&mut self, v: Value, at: Origin) {
         self.later.truncate(self.idx);
-        self.later.push_back(v);
+        self.later.push_back((v, at));
         if self.len() > HISTORY {
-            if let Some(next) = self.later.pop_front() {
+            if let Some((next, next_at)) = self.later.pop_front() {
                 self.first = next;
+                self.first_at = next_at;
             }
         }
         self.idx = self.len() - 1;
@@ -366,6 +404,7 @@ enum Frame {
 struct Task {
     frames: Vec<Frame>,
     wake: u64,
+    file: u16,
 }
 
 /// What `play` and `stop` ask the engine to do.
@@ -461,6 +500,11 @@ struct Handler {
     scope: Rc<Scope>,
     was_true: bool,
     has_wait: bool,
+    /// where the `on` line is
+    line: usize,
+    file: u16,
+    /// it hit an error while a game was running, so it's switched off
+    broken: bool,
 }
 
 struct MimicJob {
@@ -523,6 +567,8 @@ pub struct Interp {
     pub tests_failed: usize,
     include_depth: usize,
     tasks: Vec<Task>,
+    /// errors from `on` blocks while a game runs (the engine shows them; the game keeps going)
+    pub errors: Vec<EzaError>,
     /// `play` / `stop` requests waiting for the engine (only collected when there is a window)
     pub sound_cmds: Vec<SoundCmd>,
     /// `emit 30 from sparks [at p]`: (emitter name, count, position) for the engine
@@ -540,6 +586,10 @@ pub struct Interp {
     /// the script this interpreter was started with
     #[allow(dead_code)]
     pub file: PathBuf,
+    /// every file that has run (the main script, includes, modules); Origin::file indexes it
+    pub files: Vec<String>,
+    /// the file whose code is running right now
+    cur_file: u16,
     dir: PathBuf,
     pub line: usize,
     depth: usize,
@@ -588,6 +638,7 @@ impl Interp {
             include_depth: 0,
             tasks: vec![],
             sound_cmds: vec![],
+            errors: vec![],
             bursts: vec![],
             go_to: None,
             entities: std::collections::BTreeMap::new(),
@@ -596,6 +647,8 @@ impl Interp {
             dbs: HashMap::new(),
             included: HashSet::new(),
             file: main_file.to_path_buf(),
+            files: vec![main_file.display().to_string()],
+            cur_file: 0,
             dir: main_file.parent().map(|p| p.to_path_buf()).unwrap_or_default(),
             line: 0,
             depth: 0,
@@ -623,7 +676,27 @@ impl Interp {
     }
 
     fn rt<T>(&self, msg: impl Into<String>) -> R<T> {
-        Err(EzaError::runtime(self.line, msg))
+        Err(EzaError::runtime(self.line, msg).in_file(self.file_name(self.cur_file)))
+    }
+
+    /// The place in the code running right now, stored with every change.
+    fn origin(&self) -> Origin {
+        Origin { line: self.line as u32, file: self.cur_file, frame: self.frame as u32 }
+    }
+
+    pub fn file_name(&self, id: u16) -> &str {
+        self.files.get(id as usize).map(|s| s.as_str()).unwrap_or("")
+    }
+
+    /// The number for a file name in `files` (added if it's new).
+    fn file_id(&mut self, name: &str) -> u16 {
+        match self.files.iter().position(|f| f == name) {
+            Some(i) => i as u16,
+            None => {
+                self.files.push(name.to_string());
+                (self.files.len() - 1) as u16
+            }
+        }
     }
 
     pub fn random(&mut self) -> f64 {
@@ -637,12 +710,12 @@ impl Interp {
     }
 
     fn new_var(&self, v: Value) -> VarRef {
-        Rc::new(RefCell::new(Var::new(v, self.in_mimic)))
+        Rc::new(RefCell::new(Var::new(v, self.in_mimic, self.origin())))
     }
 
     pub fn make_func(&self, name: &str, body: Rc<Vec<Stmt>>, scope: &Rc<Scope>) -> Value {
         let def = Rc::new(FuncDef::new(name.to_string(), vec![], body));
-        Value::Func(Rc::new(Func { def, closure: scope.clone() }))
+        Value::Func(Rc::new(Func { def, closure: scope.clone(), file: self.cur_file }))
     }
 
     pub fn run_source(&mut self, src: &str, file: &str) -> R<()> {
@@ -653,7 +726,11 @@ impl Interp {
     fn run_in(&mut self, src: &str, file: &str, scope: &Rc<Scope>) -> R<()> {
         let toks = lexer::lex(src).map_err(|e| e.in_file(file))?;
         let prog = parser::Parser::new(toks).program().map_err(|e| e.in_file(file))?;
-        self.exec_block(&prog, scope).map_err(|e| e.in_file(file))?;
+        let id = self.file_id(file);
+        let outer = std::mem::replace(&mut self.cur_file, id);
+        let r = self.exec_block(&prog, scope).map_err(|e| e.in_file(file));
+        self.cur_file = outer;
+        r?;
         Ok(())
     }
 
@@ -712,7 +789,7 @@ impl Interp {
     }
 
     pub fn commit(&mut self, var: &VarRef, v: Value) {
-        var.borrow_mut().set(v);
+        var.borrow_mut().set_at(v, self.origin());
         if self.in_mimic {
             return;
         }
@@ -802,6 +879,12 @@ impl Interp {
                 let fresh_each_time = declares(body);
                 let mut reuse: Option<(Rc<Scope>, VarRef)> = None;
                 let name: Rc<str> = Rc::from(name.as_str());
+                // for explaining errors: `enemy` is enemies[i]
+                let source = if writeback {
+                    self.place_of(e, scope).map(|(var, path, _)| Rc::new(Source { var, name: crate::diagnose::code(e), path }))
+                } else {
+                    None
+                };
                 for (i, item) in items.into_iter().enumerate() {
                     if self.in_mimic && self.each_depth == 1 {
                         self.mimic_steps += 1;
@@ -810,7 +893,7 @@ impl Interp {
                     // them (a short function or `on` made inside the loop, or the rewind history)
                     let (sc, lv) = match reuse.take() {
                         Some((sc, lv)) if Rc::strong_count(&sc) == 1 && Rc::strong_count(&lv) == 2 => {
-                            *lv.borrow_mut() = Var::new(item.clone(), self.in_mimic);
+                            *lv.borrow_mut() = Var::new(item.clone(), self.in_mimic, self.origin());
                             (sc, lv)
                         }
                         Some((sc, _)) if Rc::strong_count(&sc) == 1 => {
@@ -825,6 +908,9 @@ impl Interp {
                             (sc, lv)
                         }
                     };
+                    if let Some(src) = &source {
+                        lv.borrow_mut().source = Some((src.clone(), Some(i)));
+                    }
                     let r = self.exec_block(body, &sc);
                     if !fresh_each_time {
                         reuse = Some((sc, lv.clone()));
@@ -857,7 +943,7 @@ impl Interp {
                 }
             }
             StmtKind::Define(def) => {
-                let f = Value::Func(Rc::new(Func { def: def.clone(), closure: scope.clone() }));
+                let f = Value::Func(Rc::new(Func { def: def.clone(), closure: scope.clone(), file: self.cur_file }));
                 scope.insert(&def.name, self.new_var(f));
             }
             StmtKind::Return(es) => {
@@ -985,6 +1071,9 @@ impl Interp {
                 scope: scope.clone(),
                 was_true: false,
                 has_wait: block_has_wait(body),
+                line: s.line,
+                file: self.cur_file,
+                broken: false,
             }),
             StmtKind::Persist { body, steps, until } => {
                 let prev = self.capture.replace(vec![]);
@@ -1043,7 +1132,8 @@ impl Interp {
                         Err(e) if e.is_switch() => return Err(e),
                         Err(e) => {
                             self.tests_failed += 1;
-                            println!("  FAIL  {}\n          line {}: {}", name, e.line, e.msg);
+                            let e = e.in_file(self.file_name(self.cur_file));
+                            println!("  FAIL  {}\n{}\n", name, crate::indent(&e.to_string(), 8));
                         }
                     }
                 }
@@ -1177,7 +1267,10 @@ impl Interp {
         let (name, path) = self.lvalue(target, scope)?;
         let var = match scope.lookup(name) {
             Some(v) => v,
-            None => return self.rt(self.did_you_mean(format!("'{0}' doesn't exist yet - create it first with '{0} = ...'.", name), name, scope)),
+            None => {
+                let err = self.rt::<()>(self.did_you_mean(format!("'{0}' doesn't exist yet - create it first with '{0} = ...'.", name), name, scope)).unwrap_err();
+                return Err(self.explain_missing(err, name, scope));
+            }
         };
         let var = if path.is_empty() { var } else { deref_var(var) };
         self.module_guard(&var, name, &path)?;
@@ -1588,10 +1681,11 @@ impl Interp {
         if let Expr::Binary(op, l, r) = e {
             if op.is_comparison() {
                 let (a, b) = (self.eval(l, scope)?, self.eval(r, scope)?);
-                if self.binop(op.as_str(), a.clone(), b.clone())?.truthy() {
+                if self.binop(op.as_str(), &a, &b)?.truthy() {
                     return Ok(());
                 }
-                return self.rt(format!("expect failed: {} {} {} is not true", a.repr(), op.as_str(), b.repr()));
+                let err = self.rt::<()>(format!("expect failed: {} {} {} is not true", a.repr(), op.as_str(), b.repr())).unwrap_err();
+                return Err(self.explain_expect(err, l, r, &a, &b, scope));
             }
         }
         if self.eval(e, scope)?.truthy() {
@@ -1737,7 +1831,7 @@ impl Interp {
     // ---------- background tasks (wait) ----------
 
     fn spawn_task(&mut self, body: Rc<Vec<Stmt>>, scope: Rc<Scope>) -> R<()> {
-        let mut t = Task { frames: vec![Frame::Block { stmts: body, idx: 0, scope }], wake: self.frame };
+        let mut t = Task { frames: vec![Frame::Block { stmts: body, idx: 0, scope }], wake: self.frame, file: self.cur_file };
         if !self.run_task(&mut t)? {
             self.tasks.push(t);
         }
@@ -1746,6 +1840,13 @@ impl Interp {
 
     /// Runs a task until it finishes (true) or hits a `wait` (false).
     fn run_task(&mut self, t: &mut Task) -> R<bool> {
+        let outer = std::mem::replace(&mut self.cur_file, t.file);
+        let r = self.run_task_steps(t);
+        self.cur_file = outer;
+        r.map_err(|e| e.in_file(self.file_name(t.file)))
+    }
+
+    fn run_task_steps(&mut self, t: &mut Task) -> R<bool> {
         enum Act {
             Pop,
             Push(Frame),
@@ -2307,25 +2408,32 @@ impl Interp {
         // `on scene.ticks` runs every frame; other `on` conditions fire once each time they become true
         let n = self.handlers.len();
         for i in 0..n {
-            let (cond, body, sc, has_wait) = {
-                let h = &self.handlers[i];
-                (h.cond.clone(), h.body.clone(), h.scope.clone(), h.has_wait)
-            };
-            let every_frame = matches!(&cond, Expr::Field(_, f) if f == "ticks");
-            let now = every_frame || self.eval(&cond, &sc)?.truthy();
-            let fire = every_frame || (now && !self.handlers[i].was_true);
-            self.handlers[i].was_true = now;
-            if fire {
-                let prev = self.current_on.replace((cond, sc.clone()));
-                let r = if has_wait {
-                    // a handler with `wait` runs in the background so it can pause between frames
-                    let child = Scope::new(Some(sc.clone()));
-                    self.spawn_task(body.clone(), child)
-                } else {
-                    self.exec_child(&body, &sc).map(|_| ())
-                };
-                self.current_on = prev;
-                r?;
+            if self.handlers[i].broken {
+                continue;
+            }
+            let (file, line, cond) = (self.handlers[i].file, self.handlers[i].line, self.handlers[i].cond.clone());
+            let outer = std::mem::replace(&mut self.cur_file, file);
+            let r = self.run_handler(i);
+            self.cur_file = outer;
+            if let Err(e) = r {
+                if e.is_switch() {
+                    return Err(e);
+                }
+                let mut e = e.in_file(self.file_name(file));
+                e.context.push(format!(
+                    "on frame {} ({:.1} s in), inside  on {}  (line {})",
+                    self.frame,
+                    self.frame as f64 / 60.0,
+                    crate::diagnose::code(&cond),
+                    line
+                ));
+                if !self.frame_mode {
+                    return Err(e);
+                }
+                // in a running game, only this `on` block stops; the rest carries on
+                self.handlers[i].broken = true;
+                e.context.push("that `on` block is switched off now; the rest of the game keeps running".to_string());
+                self.errors.push(e);
             }
         }
         // background tasks (functions / handlers using `wait`) wake up here
@@ -2334,8 +2442,19 @@ impl Interp {
         for mut t in tasks.drain(..) {
             if t.wake > self.frame {
                 keep.push(t);
-            } else if !self.run_task(&mut t)? {
-                keep.push(t);
+                continue;
+            }
+            match self.run_task(&mut t) {
+                Ok(true) => {}
+                Ok(false) => keep.push(t),
+                Err(e) if e.is_switch() => return Err(e),
+                Err(mut e) => {
+                    e.context.push(format!("on frame {} ({:.1} s in), in something that uses wait", self.frame, self.frame as f64 / 60.0));
+                    if !self.frame_mode {
+                        return Err(e);
+                    }
+                    self.errors.push(e);
+                }
             }
         }
         keep.extend(std::mem::take(&mut self.tasks));
@@ -2343,6 +2462,37 @@ impl Interp {
         crate::physics::step(self)?;
         crate::physics::step2d(self)?;
         Ok(())
+    }
+
+    /// Checks one `on` block's condition and runs it if it fires.
+    fn run_handler(&mut self, i: usize) -> R<()> {
+        let (cond, body, sc, has_wait) = {
+            let h = &self.handlers[i];
+            (h.cond.clone(), h.body.clone(), h.scope.clone(), h.has_wait)
+        };
+        let every_frame = matches!(&cond, Expr::Field(_, f) if f == "ticks");
+        let now = every_frame || self.eval(&cond, &sc)?.truthy();
+        let fire = every_frame || (now && !self.handlers[i].was_true);
+        self.handlers[i].was_true = now;
+        if fire {
+            let prev = self.current_on.replace((cond, sc.clone()));
+            let r = if has_wait {
+                // a handler with `wait` runs in the background so it can pause between frames
+                let child = Scope::new(Some(sc.clone()));
+                self.spawn_task(body.clone(), child)
+            } else {
+                self.exec_child(&body, &sc).map(|_| ())
+            };
+            self.current_on = prev;
+            r?;
+        }
+        Ok(())
+    }
+
+    /// Errors from `on` blocks in a running game, since the engine last looked.
+    #[allow(dead_code)] // used by the engine build
+    pub fn take_errors(&mut self) -> Vec<EzaError> {
+        std::mem::take(&mut self.errors)
     }
 
     // ---------- scene ----------
@@ -2497,7 +2647,10 @@ impl Interp {
             Expr::Ident(n) => match scope.value_of(n) {
                 Some(v) => v,
                 None if methods::BUILTINS.contains(&n.as_str()) => Value::Native(n.clone()),
-                None => return self.rt(self.did_you_mean(format!("'{0}' doesn't exist yet - create it with '{0} = ...'.", n), n, scope)),
+                None => {
+                    let err = self.rt::<()>(self.did_you_mean(format!("'{0}' doesn't exist yet - create it with '{0} = ...'.", n), n, scope)).unwrap_err();
+                    return Err(self.explain_missing(err, n, scope));
+                }
             },
             Expr::Field(obj, name) => {
                 let o = self.eval(obj, scope)?;
@@ -2525,14 +2678,24 @@ impl Interp {
                     Value::Module(m) => return self.module_get(m, name),
                     _ => {}
                 }
-                methods::call(self, o, name, vec![], false)?
+                match methods::call(self, o, name, vec![], false) {
+                    Ok(v) => v,
+                    Err(err) => return Err(self.explain_field(err, obj, name, e, scope)),
+                }
             }
             Expr::Index(obj, idx) => {
                 let o = deref_val(self.eval(obj, scope)?);
                 let i = self.eval(idx, scope)?;
-                get_one(&o, &PathEl::Index(i), self.line)?
+                let key = PathEl::Index(i);
+                match get_one(&o, &key, self.line) {
+                    Ok(v) => v,
+                    Err(err) => {
+                        let PathEl::Index(i) = key else { unreachable!() };
+                        return Err(self.explain_index(err, obj, idx, &o, &i, scope));
+                    }
+                }
             }
-            Expr::Call(callee, args) => self.call(callee, args, scope)?,
+            Expr::Call(callee, args) => self.call(callee, args, scope, e)?,
             Expr::Unary(op, x) => {
                 let v = self.eval(x, scope)?;
                 match *op {
@@ -2585,9 +2748,12 @@ impl Interp {
                         return Ok(v);
                     }
                 }
-                self.binop(op.as_str(), a, b)?
+                match self.binop(op.as_str(), &a, &b) {
+                    Ok(v) => v,
+                    Err(err) => return Err(self.explain_binop(err, *op, l, r, &a, &b, e, scope)),
+                }
             }
-            Expr::Lambda(d) => Value::Func(Rc::new(Func { def: d.clone(), closure: scope.clone() })),
+            Expr::Lambda(d) => Value::Func(Rc::new(Func { def: d.clone(), closure: scope.clone(), file: self.cur_file })),
             Expr::Spawn { prefab, at, props } => self.spawn(prefab, at, props, scope)?,
             Expr::Dict(items) => {
                 let mut o = Obj::new("dict");
@@ -2627,9 +2793,9 @@ impl Interp {
         })
     }
 
-    fn binop(&self, op: &str, a: Value, b: Value) -> R<Value> {
+    fn binop(&self, op: &str, a: &Value, b: &Value) -> R<Value> {
         use Value::*;
-        Ok(match (op, &a, &b) {
+        Ok(match (op, a, b) {
             ("+", Num(x), Num(y)) => Num(x + y),
             ("+", Str(x), _) => Str(format!("{}{}", x, b.display())),
             ("+", _, Str(y)) => Str(format!("{}{}", a.display(), y)),
@@ -2673,10 +2839,10 @@ impl Interp {
                     _ => p >> q,
                 } as f64)
             }
-            ("==", _, _) => Bool(equals(&a, &b)),
-            ("!=", _, _) => Bool(!equals(&a, &b)),
+            ("==", _, _) => Bool(equals(a, b)),
+            ("!=", _, _) => Bool(!equals(a, b)),
             ("<" | ">" | "<=" | ">=", _, _) => {
-                let Some(o) = cmp_values(&a, &b) else {
+                let Some(o) = cmp_values(a, b) else {
                     return self.rt(format!("can't compare {} and {}", a.type_name(), b.type_name()));
                 };
                 Bool(match op {
@@ -2690,7 +2856,25 @@ impl Interp {
         })
     }
 
-    fn call(&mut self, callee: &Expr, args: &[Arg], scope: &Rc<Scope>) -> R<Value> {
+    fn call(&mut self, callee: &Expr, args: &[Arg], scope: &Rc<Scope>, whole: &Expr) -> R<Value> {
+        let line = self.line;
+        let r = self.call_inner(callee, args, scope);
+        match r {
+            Err(err) if !err.explained && !err.is_switch() && err.line == line && err.trace.is_empty() => {
+                self.line = line;
+                match callee {
+                    // thing.name(...): a method that isn't there
+                    Expr::Field(obj, name) if err.msg.contains("has no method") || err.msg.contains("has no property") => {
+                        Err(self.explain_field(err, obj, name, whole, scope))
+                    }
+                    _ => Err(self.explain_call(err, callee, whole, scope)),
+                }
+            }
+            other => other,
+        }
+    }
+
+    fn call_inner(&mut self, callee: &Expr, args: &[Arg], scope: &Rc<Scope>) -> R<Value> {
         let (mut vals, mut named, mut aliases) = (Vec::with_capacity(args.len()), vec![], vec![]);
         for a in args {
             let v = self.eval(&a.value, scope)?;
@@ -2755,7 +2939,7 @@ impl Interp {
             let v = self.eval(e, scope)?;
             proto.set(k, v);
         }
-        let methods = decl.methods.iter().map(|d| Rc::new(Func { def: d.clone(), closure: scope.clone() })).collect();
+        let methods = decl.methods.iter().map(|d| Rc::new(Func { def: d.clone(), closure: scope.clone(), file: self.cur_file })).collect();
         Ok(Value::Data(Rc::new(DataDef { name: decl.name.clone(), fields: proto.fields, methods, parent })))
     }
 
@@ -2773,6 +2957,9 @@ impl Interp {
         named: Vec<(String, Value)>,
     ) -> R<Value> {
         let me_var = self.new_var(me.clone());
+        if let Some(src) = receiver.and_then(|e| self.place_of(e, scope).map(|(var, path, _)| (var, path, crate::diagnose::code(e)))) {
+            me_var.borrow_mut().source = Some((Rc::new(Source { var: src.0, path: src.1, name: src.2 }), None));
+        }
         let result = self.call_func(f, vals, named, vec![], Some((me_var.clone(), owner)))?;
         let after = me_var.borrow().get().clone();
         let changed = match (&me, &after) {
@@ -2890,19 +3077,29 @@ impl Interp {
         }
         if def.has_wait {
             // a function that waits runs in the background; the caller carries on immediately
-            self.spawn_task(def.body.clone(), sc)?;
+            let caller_file = std::mem::replace(&mut self.cur_file, func.file);
+            let r = self.spawn_task(def.body.clone(), sc);
+            self.cur_file = caller_file;
+            r?;
             return Ok(Value::None);
         }
         let saved_line = self.line;
+        let caller_file = std::mem::replace(&mut self.cur_file, func.file);
         self.depth += 1;
-        let r = self.exec_block(&def.body, &sc).map_err(|mut e| {
+        let r = self.exec_block(&def.body, &sc);
+        self.depth -= 1;
+        self.cur_file = caller_file;
+        let r = r.map_err(|mut e| {
+            // errors inside the function belong to the file it was written in
+            if e.file.is_empty() {
+                e.file = self.file_name(func.file).to_string();
+            }
             // stack trace: remember which function the error passed through
             if e.trace.len() < 50 {
                 e.trace.push((def.name.clone(), saved_line));
             }
             e
         });
-        self.depth -= 1;
         self.line = saved_line;
         Ok(match r? {
             Flow::Return(v) => v,

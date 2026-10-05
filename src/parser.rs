@@ -1,5 +1,5 @@
 use crate::ast::*;
-use crate::error::{EzaError, R};
+use crate::error::{EzaError, Target, R};
 use crate::lexer::{self, Tok, Token};
 use std::rc::Rc;
 
@@ -38,10 +38,10 @@ fn check_purity(body: &[Stmt], shadow: &str, locals: &mut Vec<String>) -> R<()> 
             StmtKind::Change(t, _, _) | StmtKind::Push(_, t) => {
                 let root = root_name(t).unwrap_or("");
                 if root != shadow && !locals.iter().any(|l| l == root) {
-                    return Err(EzaError::syntax(
-                        s.line,
-                        format!("Cannot modify global variable '{}' inside an isolated simulation block.", root),
-                    ));
+                    let mut e = EzaError::syntax(s.line, format!("Cannot modify global variable '{}' inside an isolated simulation block.", root));
+                    e.label(Target::Expr(t.clone()), format!("only {} can change in here", shadow), true);
+                    e.help.push(format!("a mimic is a prediction, so it can't change the real '{}'; change {} instead, or make a new variable inside the block", root, shadow));
+                    return Err(e);
                 }
             }
             StmtKind::If(arms, els) => {
@@ -115,7 +115,9 @@ fn interpolate(s: String, line: usize) -> R<Expr> {
             }
             let inner: String = c[i + 1..j].iter().collect();
             let fix = |mut e: EzaError| {
+                // columns inside the {...} don't match the line itself
                 e.line = line;
+                e.labels.clear();
                 e
             };
             let mut p = Parser::new(lexer::lex(&inner).map_err(fix)?);
@@ -186,8 +188,26 @@ impl Parser {
         }
         yes
     }
+    #[cfg(test)]
+    pub fn expr_for_tests(&mut self) -> R<Expr> {
+        self.expr()
+    }
+
+    /// A syntax error pointing at the token the parser is looking at.
     fn err<T>(&self, msg: impl Into<String>) -> R<T> {
-        Err(EzaError::syntax(self.line(), msg))
+        Err(self.error_at(self.p, msg))
+    }
+    fn error_at(&self, k: usize, msg: impl Into<String>) -> EzaError {
+        let t = &self.t[k.min(self.t.len() - 1)];
+        let mut e = EzaError::syntax(t.line, msg);
+        if !matches!(t.tok, Tok::Newline | Tok::Indent | Tok::Dedent | Tok::Eof) {
+            e.label(Target::Cols(t.col, t.end), "", true);
+        }
+        e
+    }
+    /// The same, for the token just taken with `next()`.
+    fn err_prev<T>(&self, msg: impl Into<String>) -> R<T> {
+        Err(self.error_at(self.p.saturating_sub(1), msg))
     }
     fn expect_kw(&mut self, k: &str) -> R<()> {
         if self.eat_kw(k) {
@@ -334,7 +354,7 @@ impl Parser {
                 self.eat_sym(",");
                 let params = self.params()?;
                 let body = Rc::new(self.block()?);
-                StmtKind::Define(Rc::new(FuncDef::new(name, params, body)))
+                StmtKind::Define(Rc::new(FuncDef::new(name, params, body).at(line)))
             }
             // `class` is another word for `data`, for people coming from Python
             "data" | "class" if is_decl && matches!(self.peek_n(1), Tok::Ident(_)) => {
@@ -477,7 +497,7 @@ impl Parser {
                 self.next();
                 let params = self.params()?;
                 let body = Rc::new(self.block()?);
-                let def = Rc::new(FuncDef::new(name.clone(), params, body));
+                let def = Rc::new(FuncDef::new(name.clone(), params, body).at(line));
                 StmtKind::Assign(name, Expr::Lambda(def))
             }
             _ => {
@@ -853,7 +873,6 @@ impl Parser {
     }
 
     fn prop_atom(&mut self) -> R<Expr> {
-        let line = self.line();
         Ok(match self.next() {
             Tok::Num(n) => Expr::Num(n),
             Tok::Str(s) => Expr::Str(s),
@@ -876,9 +895,9 @@ impl Parser {
             }
             Tok::Sym("-") => match self.next() {
                 Tok::Num(n) => Expr::Num(-n),
-                t => return Err(EzaError::syntax(line, format!("expected a number after '-', found {}", describe(&t)))),
+                t => return self.err_prev(format!("expected a number after '-', found {}", describe(&t))),
             },
-            t => return Err(EzaError::syntax(line, format!("expected a value, found {}", describe(&t)))),
+            t => return self.err_prev(format!("expected a value, found {}", describe(&t))),
         })
     }
 
@@ -917,7 +936,7 @@ impl Parser {
             }
             let body = self.expr()?;
             let ret = Stmt { line, kind: StmtKind::Return(vec![body]) };
-            return Ok(Expr::Lambda(Rc::new(FuncDef::new("function".into(), params, Rc::new(vec![ret])))));
+            return Ok(Expr::Lambda(Rc::new(FuncDef::new("function".into(), params, Rc::new(vec![ret])).at(line))));
         }
         let mut l = self.and()?;
         while self.eat_kw("or") {
@@ -1133,7 +1152,7 @@ impl Parser {
                 self.expect_sym("]")?;
                 Expr::List(items)
             }
-            t => return Err(EzaError::syntax(line, format!("expected a value but found {}", describe(&t)))),
+            t => return self.err_prev(format!("expected a value but found {}", describe(&t))),
         })
     }
 }

@@ -114,13 +114,19 @@ pub struct FuncDef {
     pub has_wait: bool,
     /// the parameter names, shared (so a call doesn't copy each name into its scope)
     pub param_names: Vec<Rc<str>>,
+    /// the line of its `define` (0 if unknown)
+    pub line: usize,
 }
 
 impl FuncDef {
     pub fn new(name: String, params: Vec<String>, body: Rc<Vec<Stmt>>) -> Self {
         let has_wait = block_has_wait(&body);
         let param_names = params.iter().map(|p| Rc::from(p.as_str())).collect();
-        FuncDef { name, params, body, has_wait, param_names }
+        FuncDef { name, params, body, has_wait, param_names, line: 0 }
+    }
+    pub fn at(mut self, line: usize) -> Self {
+        self.line = line;
+        self
     }
 }
 

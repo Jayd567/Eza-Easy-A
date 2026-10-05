@@ -261,14 +261,20 @@ function activate(context) {
   const same = (a, b) => path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase();
   const check = (doc) => {
     if (doc.languageId !== 'eza' || doc.uri.scheme !== 'file') return;
-    // `eza check` lists every problem it finds, one per line
-    execFile(exePath(), ['check', doc.fileName], { cwd: path.dirname(doc.fileName) }, (_err, _stdout, stderr) => {
+    // `eza check --plain` lists every problem it finds, one per line: file:line[:col:endcol]: message
+    execFile(exePath(), ['check', '--plain', doc.fileName], { cwd: path.dirname(doc.fileName) }, (_err, _stdout, stderr) => {
       const list = [];
-      for (const m of (stderr || '').matchAll(/\[(Syntax|Runtime|Check) Error\] (.*):(\d+): (.*)/g)) {
-        // only problems in this file (eza check also reports included files)
-        if (!same(m[2], doc.fileName)) continue;
-        const line = Math.min(Math.max(0, parseInt(m[3], 10) - 1), doc.lineCount - 1);
-        list.push(new vscode.Diagnostic(doc.lineAt(line).range, m[4], vscode.DiagnosticSeverity.Error));
+      for (const m of (stderr || '').matchAll(/\[(Syntax|Runtime|Check) (Error|Warning)\] (.*?):(\d+)(?::(\d+):(\d+))?: (.*)/g)) {
+        // only problems in this file (eza check also reports included files and modules)
+        if (!same(m[3], doc.fileName)) continue;
+        const line = Math.min(Math.max(0, parseInt(m[4], 10) - 1), doc.lineCount - 1);
+        let range = doc.lineAt(line).range;
+        if (m[5]) {
+          // the exact spot, when eza knows it
+          range = new vscode.Range(line, parseInt(m[5], 10) - 1, line, parseInt(m[6], 10) - 1);
+        }
+        const severity = m[2] === 'Warning' ? vscode.DiagnosticSeverity.Warning : vscode.DiagnosticSeverity.Error;
+        list.push(new vscode.Diagnostic(range, m[7], severity));
       }
       diags.set(doc.uri, list);
     });

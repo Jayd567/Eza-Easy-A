@@ -61,7 +61,7 @@ gui window "counter" centered=true gap=12
 | **Everyday tools** | files and folders, CSV, JSON, `fetch` from the web, `database`, dates, running other programs, command-line `args` |
 | **Bigger programs** | functions, classes (`data` with methods, `from`, `super`), modules (`use "file.eza"`), tests (`eza test`) |
 | **Time travel** | `rewind`, `persist` (changes that undo themselves), `mimic` (predict the future), and the F1 debugger |
-| **Help with mistakes** | `eza check` finds typos with "did you mean...?", and errors show where and why |
+| **Help with mistakes** | Errors underline the exact spot, show the values involved and **how they got that way** (from the change history), and suggest a fix. Games pause on the frame it went wrong, so you can step back and watch. `eza check` finds mistakes before running; `eza explain E003` explains any error |
 | **Sharing** | `eza build game.eza` makes a `.exe` your friends can run without installing anything |
 
 ## Commands

@@ -316,8 +316,19 @@ pub fn call(it: &mut Interp, recv: Value, name: &str, args: Vec<Value>, called: 
     match r? {
         Some(v) => Ok(v),
         None => {
+            // "did you mean" among the object's own names
+            let hint = match &recv {
+                Value::Obj(o) => {
+                    let names: Vec<String> = o.fields.iter().map(|(k, _)| k.clone()).collect();
+                    crate::suggest::closest(name, &names).map(|c| format!(" - did you mean '{}'?", c)).unwrap_or_default()
+                }
+                _ => String::new(),
+            };
+            if matches!(&recv, Value::Obj(o) if o.type_name == "dict") && !called {
+                return err(it, format!("there's no key \"{}\"{}", name, hint));
+            }
             let what = if called { "method" } else { "property or method" };
-            err(it, format!("{} has no {} '.{}'", recv.type_name(), what, name))
+            err(it, format!("{} has no {} '.{}'{}", recv.type_name(), what, name, hint))
         }
     }
 }

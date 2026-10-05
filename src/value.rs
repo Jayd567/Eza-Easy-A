@@ -31,6 +31,8 @@ impl Obj {
 pub struct Func {
     pub def: Rc<FuncDef>,
     pub closure: Rc<Scope>,
+    /// the file it was written in (an index into Interp::files), for error messages
+    pub file: u16,
 }
 
 pub struct PrefabDef {

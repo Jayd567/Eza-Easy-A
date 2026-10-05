@@ -2,6 +2,7 @@ mod ast;
 #[cfg(feature = "engine")]
 mod engine;
 mod check;
+mod diagnose;
 mod error;
 mod interp;
 mod layout;
@@ -33,7 +34,21 @@ usage:
   eza check <file>    find mistakes (typos, wrong argument counts, ...) without running
   eza test [path]     run the `test` blocks in a file or every .eza file in a folder
   eza build <file>    make dist/<name>/ with <name>.exe, to share without installing Eza
+  eza explain E003    explain an error code in detail (`eza explain` lists them)
   eza --version";
+
+/// For built programs: errors are also written next to the program, so players can send them in.
+static REPORT: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+/// Adds an error to the report file of a built program (does nothing for `eza` itself).
+pub fn write_report(text: &str) {
+    let Some(path) = REPORT.get() else { return };
+    let when = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
+    let entry = format!("---- {} ----\n{}\n\n", when, text);
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+        let _ = f.write_all(entry.as_bytes());
+    }
+}
 
 /// A program made by `eza build`: `game.exe` runs the `game.eza` sitting next to it.
 fn bundled_script() -> Option<String> {
@@ -46,7 +61,7 @@ fn bundled_script() -> Option<String> {
 fn script_args(args: &[String]) -> Vec<String> {
     match args.first().map(|s| s.as_str()) {
         Some("play" | "run") => args.iter().skip(2).cloned().collect(),
-        Some("check" | "test" | "build" | "help" | "--help" | "-h" | "--version" | "-v") | None => vec![],
+        Some("check" | "test" | "build" | "explain" | "help" | "--help" | "-h" | "--version" | "-v") | None => vec![],
         Some(_) => args.iter().skip(1).cloned().collect(),
     }
 }
@@ -56,6 +71,7 @@ fn main() {
     // a built program: everything typed after its name goes to the script
     let double_clicked = args.is_empty() && bundled_script().is_some();
     if let Some(script) = bundled_script() {
+        let _ = REPORT.set(Path::new(&script).with_extension("errors.txt"));
         args.insert(0, script);
     }
     if double_clicked {
@@ -117,11 +133,11 @@ fn build_cmd(path: &str) -> i32 {
         eprintln!("eza build needs an .eza file, like: eza build game.eza");
         return 2;
     }
-    // don't package a program that can't run
-    let problems = check::check_file(path);
+    // don't package a program that can't run (warnings are fine)
+    let problems: Vec<_> = check::check_file(path).into_iter().filter(|d| !check::is_warning(d)).collect();
     if !problems.is_empty() {
         for d in &problems {
-            eprintln!("{}", d);
+            eprintln!("{}\n", d);
         }
         eprintln!("Fix these first (they're what `eza check` finds), then build again.");
         return 1;
@@ -174,13 +190,18 @@ fn run(args: Vec<String>) -> i32 {
             println!("{}", USAGE);
             0
         }
-        Some("check") => match args.get(1) {
-            Some(f) => check(f),
-            None => {
-                eprintln!("{}", USAGE);
-                2
+        Some("check") => {
+            // --plain: one line per problem with exact columns (what the VS Code extension reads)
+            let plain = args.iter().any(|a| a == "--plain");
+            match args.iter().skip(1).find(|a| *a != "--plain") {
+                Some(f) => check(f, plain),
+                None => {
+                    eprintln!("{}", USAGE);
+                    2
+                }
             }
-        },
+        }
+        Some("explain") => diagnose::explain(args.get(1).map(|s| s.as_str())),
         Some("play") => match args.get(1) {
             // scripts with a scene were already sent to the window in main()
             #[cfg(not(feature = "engine"))]
@@ -218,7 +239,7 @@ fn run(args: Vec<String>) -> i32 {
 fn script_arg(args: &[String]) -> Option<&str> {
     match args.first().map(|s| s.as_str())? {
         "play" => args.get(1).map(|s| s.as_str()),
-        "run" | "check" | "test" | "build" | "help" | "--help" | "-h" | "--version" | "-v" => None,
+        "run" | "check" | "test" | "build" | "explain" | "help" | "--help" | "-h" | "--version" | "-v" => None,
         f => Some(f),
     }
 }
@@ -273,16 +294,23 @@ fn read(path: &str) -> Option<String> {
     }
 }
 
-fn check(path: &str) -> i32 {
+fn check(path: &str, plain: bool) -> i32 {
     let diags = check::check_file(path);
-    if diags.is_empty() {
-        println!("OK");
+    for d in &diags {
+        if plain {
+            eprintln!("{}", diagnose::plain(d));
+        } else {
+            eprintln!("{}\n", d);
+        }
+    }
+    let warnings = diags.iter().filter(|d| check::is_warning(d)).count();
+    let errors = diags.len() - warnings;
+    let also = if warnings > 0 { format!(" ({} warning(s))", warnings) } else { String::new() };
+    if errors == 0 {
+        println!("OK{}", also);
         return 0;
     }
-    for d in &diags {
-        eprintln!("{}", d);
-    }
-    eprintln!("{} problem(s) found", diags.len());
+    eprintln!("{} problem(s) found{}", errors, also);
     1
 }
 
@@ -323,7 +351,7 @@ fn test_cmd(path: &str) -> i32 {
         let mut it = interp::Interp::new(&f);
         it.test_mode = true;
         if let Err(e) = it.run_source(&src, &name) {
-            eprintln!("  ERROR {}", e);
+            eprintln!("  ERROR (outside any test)\n{}", indent(&e.to_string(), 4));
             failed += 1;
         }
         passed += it.tests_passed;
@@ -341,6 +369,12 @@ fn test_cmd(path: &str) -> i32 {
     }
 }
 
+/// Every line pushed right by `n` spaces.
+pub fn indent(text: &str, n: usize) -> String {
+    let pad = " ".repeat(n);
+    text.lines().map(|l| format!("{}{}", pad, l)).collect::<Vec<_>>().join("\n")
+}
+
 fn run_file(path: &str) -> i32 {
     if read(path).is_none() {
         return 2;
@@ -348,7 +382,9 @@ fn run_file(path: &str) -> i32 {
     match interp::Interp::start(Path::new(path), None, false) {
         Ok(_) => 0,
         Err(e) => {
-            eprintln!("{}", e);
+            let text = e.to_string();
+            eprintln!("{}", text);
+            write_report(&text);
             1
         }
     }

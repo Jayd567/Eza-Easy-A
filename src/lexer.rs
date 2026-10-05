@@ -1,4 +1,11 @@
-use crate::error::{EzaError, R};
+use crate::error::{EzaError, Target, R};
+
+/// A syntax error that points at columns `from..to` of its line.
+fn err_at(line: usize, from: usize, to: usize, msg: impl Into<String>) -> EzaError {
+    let mut e = EzaError::syntax(line, msg);
+    e.label(Target::Cols(from, to.max(from + 1)), "", true);
+    e
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Tok {
@@ -17,6 +24,9 @@ pub enum Tok {
 pub struct Token {
     pub tok: Tok,
     pub line: usize,
+    /// where it sits on its line: first column and one past the last (counting characters from 0)
+    pub col: usize,
+    pub end: usize,
 }
 
 const SYMS2: [&str; 7] = ["==", "!=", "<=", ">=", "<<", ">>", "->"];
@@ -45,9 +55,11 @@ pub fn lex(src: &str) -> R<Vec<Token>> {
     let mut toks: Vec<Token> = Vec::new();
     let mut indents = vec![0usize];
     let (mut i, mut line, mut depth, mut at_start) = (0usize, 1usize, 0i32, true);
+    // index of the first character of the current line, for columns
+    let mut line_start = 0usize;
     macro_rules! push {
         ($t:expr) => {
-            toks.push(Token { tok: $t, line })
+            toks.push(Token { tok: $t, line, col: 0, end: 0 })
         };
     }
     while i < n {
@@ -67,6 +79,7 @@ pub fn lex(src: &str) -> R<Vec<Token>> {
             if c[i] == '\n' {
                 line += 1;
                 i += 1;
+                line_start = i;
                 continue;
             }
             if c[i] == '#' && color_end(&c, i).is_none() {
@@ -84,12 +97,13 @@ pub fn lex(src: &str) -> R<Vec<Token>> {
                     push!(Tok::Dedent);
                 }
                 if col != *indents.last().unwrap() {
-                    return Err(EzaError::syntax(line, "indentation doesn't line up with any outer block"));
+                    return Err(err_at(line, 0, i - line_start, "indentation doesn't line up with any outer block"));
                 }
             }
             at_start = false;
         }
         let ch = c[i];
+        let (start, before) = (i, toks.len());
         match ch {
             '\n' => {
                 if depth == 0 {
@@ -100,6 +114,7 @@ pub fn lex(src: &str) -> R<Vec<Token>> {
                 }
                 line += 1;
                 i += 1;
+                line_start = i;
             }
             ' ' | '\t' | '\r' => i += 1,
             '#' => {
@@ -127,7 +142,7 @@ pub fn lex(src: &str) -> R<Vec<Token>> {
                 let digits: String = c[s..i].iter().filter(|ch| **ch != '_').collect();
                 match i64::from_str_radix(&digits, radix) {
                     Ok(v) if !digits.is_empty() => push!(Tok::Num(v as f64)),
-                    _ => return Err(EzaError::syntax(line, "this number literal isn't valid")),
+                    _ => return Err(err_at(line, start - line_start, i - line_start, "this number literal isn't valid")),
                 }
             }
             '0'..='9' => {
@@ -157,7 +172,7 @@ pub fn lex(src: &str) -> R<Vec<Token>> {
                 let mut s = String::new();
                 loop {
                     if i >= n || c[i] == '\n' {
-                        return Err(EzaError::syntax(line, "text is missing its closing quote"));
+                        return Err(err_at(line, start - line_start, i - line_start, "text is missing its closing quote"));
                     }
                     if closers.contains(&c[i]) {
                         i += 1;
@@ -198,8 +213,15 @@ pub fn lex(src: &str) -> R<Vec<Token>> {
                     push!(Tok::Sym(s));
                     i += 1;
                 } else {
-                    return Err(EzaError::syntax(line, format!("unexpected character '{}'", ch)));
+                    return Err(err_at(line, start - line_start, start - line_start + 1, format!("unexpected character '{}'", ch)));
                 }
+            }
+        }
+        // where the token(s) made in this round sit on their line
+        if toks.len() > before && start >= line_start {
+            for t in &mut toks[before..] {
+                t.col = start - line_start;
+                t.end = i.saturating_sub(line_start).max(t.col + 1);
             }
         }
     }

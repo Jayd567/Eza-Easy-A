@@ -67,6 +67,7 @@ Eza scripts are plain text files ending in `.eza`. Run them from a terminal:
 | `eza run game.eza` | Runs a script in the terminal only, never opens a window |
 | `eza tool.eza a b` | Runs a script and hands it `a` and `b` in [`args`](#27-command-line-arguments-args) |
 | `eza check game.eza` | Finds mistakes without running anything (prints `OK`). See [finding mistakes](#45-finding-and-fixing-mistakes) |
+| `eza explain E003` | Explains an error code in detail (`eza explain` lists them all) |
 | `eza test` | Runs the `test` blocks in every `.eza` file in this folder (or `eza test game.eza`) |
 | `eza build game.eza` | Makes `dist/game/game.exe` to share. See [sharing](#46-sharing-your-program-eza-build) |
 | `eza --version` | Shows the version (`-v` also works) |
@@ -2611,6 +2612,61 @@ See `examples/menu.eza` and `examples/arena.eza` for a complete menu â†’ game â†
 
 ## 45. Finding and fixing mistakes
 
+### Reading an error message
+
+When something goes wrong, Eza shows the code with the exact spot underlined, the values involved, **how those values got that way**, and a suggested fix:
+
+```
+[Runtime Error] game.eza:14: can't divide by zero  (E003)
+ 12 | each enemy in enemies
+ 13 |     if enemy.hp > 0
+ 14 |         change player.health by enemy.attack_power / enemy.defense
+    |                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |                                                      ------------- this is 0
+ 15 |         if player.health <= 0
+  ...
+ 10 | change enemies[1].defense to armor - 5
+    |                   ------- enemies[1].defense became 0 here
+
+   enemy.defense is 0, so enemy.attack_power / enemy.defense has no answer.
+   enemy = Enemy(name: "Orc", hp: 30, attack_power: 12, defense: 0)
+     enemies[1].defense became 0 at line 10
+     enemies[1].defense was 2 when it was created, at line 8
+
+   help: check it first:   if enemy.defense != 0
+     or: never divide by less than 1:   enemy.attack_power / max(enemy.defense, 1)
+```
+
+Read it from the top:
+
+- **The first line** says what went wrong, where (file and line), and the error's code.
+- **`^^^`** marks the code that failed. **`---`** marks related spots: a value involved, or the line where a value was set, even far away in the file or in another file.
+- **The notes** show the values involved. Because Eza remembers every change (that's what makes `rewind` work), it can tell you **how a value got there**: when it last changed, on which line, and what it was before. Values copied from somewhere else are followed back: here `enemy` is `enemies[1]`, so its history is shown.
+- **`help:`** suggests a fix, written with your own names. `or:` gives another way.
+- **`in heal (called from line 4)`** lines show the chain of functions it happened inside (see [stack traces](#stack-traces)).
+
+Eza also spots common habits from other languages and says how Eza writes them: `x += 1` (Eza: `change x by 1`), `if x = 5` (Eza: `==`), `def`/`function` (Eza: `define`), `elif` (Eza: `else if`), `null`/`None` (Eza: `none`), `True` (Eza: `true`), and a `:` at the end of a line.
+
+### Error codes: `eza explain`
+
+Every kind of error has a code, like `(E003)` at the end of the first line. For a longer explanation and how to fix it:
+
+```
+eza explain E003
+```
+
+`eza explain` on its own lists every code.
+
+### When a game hits an error
+
+In a window (a game or an app), an error doesn't close everything:
+
+- The game **pauses on the exact frame** where it happened, with the error on screen and the [time-travel debugger](#the-time-travel-debugger-f1) open. Press **Left** / **Right** to step back and watch how it went wrong.
+- Press **F1** to keep playing. The `on` block that broke is **switched off**; everything else carries on. **F2** shows or hides the error again; a badge in the corner counts the errors.
+- The same error again is only counted, not shown again. When the window closes, the console lists each error and how many times it happened.
+- After 10 different errors, the game stops (you can still step through time), so one mistake doesn't bury you in hundreds of messages.
+- The message also says which frame it was, how many seconds in, and which `on` block it was inside.
+
 ### `eza check`: catch mistakes before running
 
 ```
@@ -2627,7 +2683,12 @@ This reads your program (and every file it `include`s or `use`s) without running
 - **names a module doesn't have**: `the module enemies has no 'mkae'. Did you mean 'make'?`, and private `_names` used from outside
 - every **syntax error**
 
-It prints `OK` when it finds nothing. In VS Code it runs every time you save, and puts a squiggle under each problem.
+It also **warns** about things that are probably mistakes, but won't stop the program:
+
+- **code that can never run**, because it comes right after a `return`, `break` or `continue`
+- **a variable a function creates but never uses** (start the name with `_`, like `_unused`, if that's on purpose)
+
+It prints `OK` (or `OK (2 warning(s))`) when it finds no errors. In VS Code it runs every time you save, and underlines the exact spot: red for errors, yellow for warnings.
 
 ### Stack traces
 
@@ -2698,6 +2759,7 @@ Zip the `dist/game` folder and send it. Building again replaces the old build.
 - `eza build` runs [`eza check`](#eza-check-catch-mistakes-before-running) first and refuses to build a program with mistakes in it.
 - The exe is about 60 MB, because it contains the whole Eza language and the game engine.
 - A console window opens next to the program, which shows anything you `print`. If the program stops with an error, the console waits for Enter so the message can be read.
+- Errors are also saved in a file next to the program (`game.errors.txt`), so if it goes wrong on a friend's computer, they can send you that file.
 - Words typed after the program's name reach the script as [`args`](#27-command-line-arguments-args): `game.exe easy`.
 - It makes Windows programs (`.exe`).
 
@@ -2821,6 +2883,7 @@ change global["score"] to 10   go to "level2"   global.get("score", 0)
 # ---- testing
 test "adds"
     expect 1 + 1 == 2
+eza check game.eza      eza explain E003      # in a game: F1 = step through time, F2 = show the error
 
 # ---- everyday tools
 nums.filter(n -> n > 3)   nums.map(n -> n * 2)   nums.find(n -> n > 3)   nums.count(3)
@@ -2844,6 +2907,8 @@ r = run("git status")   r.output   r.ok   run(["git", "add", "."])   run("sort",
 ---
 
 ## 48. Common errors and what they mean
+
+The message itself usually says what to do (see [reading an error message](#reading-an-error-message)). The code at the end of the first line, like `(E003)`, can be looked up with `eza explain E003`.
 
 | Message | What's wrong | Fix |
 |---|---|---|

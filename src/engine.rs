@@ -60,6 +60,59 @@ struct Runtime {
     /// the open dropdown list
     dropdown: Option<Entity>,
     rng: u64,
+    /// errors while the game runs, each kept once with how often it happened
+    errors: Vec<ErrorEntry>,
+    /// the error panel is showing (F2 toggles it)
+    error_view: bool,
+}
+
+struct ErrorEntry {
+    /// the headline, which tells repeats of the same error apart from new ones
+    key: String,
+    text: String,
+    count: u32,
+    first_frame: u64,
+    last_frame: u64,
+}
+
+/// After this many different errors the game stops, instead of piling up more and more.
+const ERROR_BUDGET: usize = 10;
+
+impl Runtime {
+    /// A new error pauses the game in the time-travel debugger with the error on screen;
+    /// the same error again is only counted.
+    fn log_error(&mut self, e: crate::error::EzaError) {
+        let key = e.headline();
+        let frame = self.it.frame;
+        if let Some(x) = self.errors.iter_mut().find(|x| x.key == key) {
+            x.count += 1;
+            x.last_frame = frame;
+            return;
+        }
+        let text = e.to_string();
+        eprintln!("{}\n", text);
+        crate::write_report(&text);
+        self.errors.push(ErrorEntry { key, text, count: 1, first_frame: frame, last_frame: frame });
+        self.debug = true;
+        self.hold = 0;
+        self.error_view = true;
+        if self.errors.len() >= ERROR_BUDGET {
+            eprintln!("{} different errors - the game was stopped. Fix the first one and try again.", ERROR_BUDGET);
+            self.failed = true;
+        }
+    }
+}
+
+/// When the window closes: how often each error happened (repeats are only printed once while playing).
+impl Drop for Runtime {
+    fn drop(&mut self) {
+        if self.errors.iter().any(|e| e.count > 1) {
+            eprintln!("Errors while playing:");
+            for e in &self.errors {
+                eprintln!("  {} - {} time(s), frames {} to {}", e.key, e.count, e.first_frame, e.last_frame);
+            }
+        }
+    }
 }
 
 impl Runtime {
@@ -81,6 +134,8 @@ impl Runtime {
             drag: None,
             dropdown: None,
             rng: 0x2545_F491_4F6C_DD1D,
+            errors: vec![],
+            error_view: false,
         }
     }
 
@@ -160,10 +215,10 @@ pub fn play(path: &str) -> i32 {
         }))
         .insert_non_send_resource(Runtime::new(it))
         .insert_resource(ClearColor(Color::srgb(0.08, 0.09, 0.12)))
-        .add_systems(Startup, (setup, setup_debug))
+        .add_systems(Startup, (setup, setup_debug, setup_errors))
         .add_systems(
             Update,
-            (scripted_inputs, scene_switch, gui_click, gui_inputs, debug_input, step, dyn_sync, sync, sync2d, gui_sync, chart_sync, input_sync, play_sounds, particles)
+            (scripted_inputs, scene_switch, gui_click, gui_inputs, debug_input, step, error_ui, dyn_sync, sync, sync2d, gui_sync, chart_sync, input_sync, play_sounds, particles)
                 .chain(),
         )
         .add_systems(Update, auto_screenshot)
@@ -729,14 +784,20 @@ fn step(
         rt.it.set_gui_field("screen", &[], "width", Value::Num(w.width() as f64));
         rt.it.set_gui_field("screen", &[], "height", Value::Num(w.height() as f64));
     }
-    if let Err(e) = rt.it.tick() {
+    let r = rt.it.tick();
+    // errors in `on` blocks: those blocks are switched off and the game carries on
+    for e in rt.it.take_errors() {
+        rt.log_error(e);
+    }
+    if let Err(e) = r {
         if e.is_switch() {
             return; // `go to`: scene_switch takes over next frame
         }
-        eprintln!("{}", e);
+        // anything else stops the game, but the window stays open to read it and step back in time
+        rt.log_error(e);
         rt.failed = true;
-        exit.send(AppExit::error());
     }
+    let _ = &mut exit;
 }
 
 fn sync(
@@ -1182,9 +1243,10 @@ fn gui_click(
                 _ => None,
             });
             if let Some(f) = f {
-                if let Err(e) = rt.it.call_value(f, vec![], vec![], vec![]) {
+                if let Err(mut e) = rt.it.call_value(f, vec![], vec![], vec![]) {
                     if !e.is_switch() {
-                        eprintln!("{}", e);
+                        e.context.push(format!("when \"{}\" was clicked, on frame {}", b.root, rt.it.frame));
+                        rt.log_error(e);
                     }
                 }
             }
@@ -1485,6 +1547,121 @@ fn debug_input(
         }
         if text.0 != s {
             text.0 = s;
+        }
+    }
+}
+
+// ---------- errors while playing ----------
+
+#[derive(Component)]
+struct ErrorPanel;
+
+#[derive(Component)]
+struct ErrorText;
+
+#[derive(Component)]
+struct ErrorBadge;
+
+fn setup_errors(mut commands: Commands) {
+    commands
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                left: Val::Px(10.0),
+                top: Val::Px(10.0),
+                max_width: Val::Percent(96.0),
+                padding: UiRect::all(Val::Px(12.0)),
+                ..default()
+            },
+            BackgroundColor(Color::srgba(0.22, 0.03, 0.05, 0.93)),
+            BorderRadius::all(Val::Px(6.0)),
+            GlobalZIndex(1001),
+            Visibility::Hidden,
+            ErrorPanel,
+        ))
+        .with_children(|p| {
+            // the built-in font is monospaced, so the ^^^ marks line up under the code
+            p.spawn((Text::new(""), TextFont { font_size: 13.0, ..default() }, TextColor(Color::srgb(1.0, 0.9, 0.88)), ErrorText));
+        });
+    commands
+        .spawn((
+            Node { position_type: PositionType::Absolute, right: Val::Px(10.0), top: Val::Px(10.0), padding: UiRect::axes(Val::Px(10.0), Val::Px(6.0)), ..default() },
+            BackgroundColor(Color::srgba(0.55, 0.05, 0.08, 0.9)),
+            BorderRadius::all(Val::Px(6.0)),
+            GlobalZIndex(1001),
+            Visibility::Hidden,
+            ErrorBadge,
+        ))
+        .with_children(|p| {
+            p.spawn((Text::new(""), TextFont { font_size: 13.0, ..default() }, TextColor(Color::WHITE), ErrorText));
+        });
+}
+
+/// The error panel (the newest error, plus a list when there are several) and the small badge
+/// that stays in the corner after you carry on playing.
+fn error_ui(
+    mut rt: NonSendMut<Runtime>,
+    keys: Res<ButtonInput<KeyCode>>,
+    mut panel: Query<(&mut Visibility, &Children), (With<ErrorPanel>, Without<ErrorBadge>)>,
+    mut badge: Query<(&mut Visibility, &Children), (With<ErrorBadge>, Without<ErrorPanel>)>,
+    mut texts: Query<&mut Text, With<ErrorText>>,
+) {
+    if rt.errors.is_empty() {
+        return;
+    }
+    if keys.just_pressed(KeyCode::F2) {
+        rt.error_view = !rt.error_view;
+    }
+    // carrying on with F1 hides the panel; the badge remembers there were errors
+    if keys.just_pressed(KeyCode::F1) && !rt.debug {
+        rt.error_view = false;
+    }
+    let show = rt.error_view;
+    if let Ok((mut vis, kids)) = panel.get_single_mut() {
+        let want = if show { Visibility::Inherited } else { Visibility::Hidden };
+        if *vis != want {
+            *vis = want;
+        }
+        if show {
+            let newest = rt.errors.last().unwrap();
+            let mut lines: Vec<&str> = newest.text.lines().collect();
+            if lines.len() > 30 {
+                lines.truncate(30);
+            }
+            let mut s = lines.join("\n");
+            if rt.errors.len() > 1 || newest.count > 1 {
+                s.push_str("\n\nall errors so far:");
+                for e in &rt.errors {
+                    s.push_str(&format!("\n  {}  x{}", e.key, e.count));
+                }
+            }
+            s.push_str(if rt.failed {
+                "\n\nThe game stopped.  F1: step through time (Left/Right) to see how it happened   F2: hide this"
+            } else {
+                "\n\nF1: step through time (Left/Right) to see how it happened, F1 again to keep playing   F2: hide this"
+            });
+            if let Some(&child) = kids.first() {
+                if let Ok(mut t) = texts.get_mut(child) {
+                    if t.0 != s {
+                        t.0 = s;
+                    }
+                }
+            }
+        }
+    }
+    if let Ok((mut vis, kids)) = badge.get_single_mut() {
+        let want = if show { Visibility::Hidden } else { Visibility::Inherited };
+        if *vis != want {
+            *vis = want;
+        }
+        let total: u32 = rt.errors.iter().map(|e| e.count).sum();
+        let s = format!("{} error(s) - F2 to see", total);
+        if let Some(&child) = kids.first() {
+            if let Ok(mut t) = texts.get_mut(child) {
+                if t.0 != s {
+                    t.0 = s;
+                }
+            }
         }
     }
 }
