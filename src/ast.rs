@@ -15,8 +15,8 @@ pub enum Expr {
     Unary(&'static str, Box<Expr>),
     Binary(Op, Box<Expr>, Box<Expr>),
     Lambda(Rc<FuncDef>),
-    /// spawn Goblin at 5,0,3 health=50
-    Spawn { prefab: Box<Expr>, at: Option<Box<Expr>>, props: Vec<(String, Expr)> },
+    /// spawn Goblin at 5,0,3 health=50 [into enemies]
+    Spawn { prefab: Box<Expr>, at: Option<Box<Expr>>, props: Vec<(String, Expr)>, into: Option<Box<Expr>> },
     /// {theme: "dark", volume: 7}
     Dict(Vec<(String, Expr)>),
     /// load "file.json" / "picture.png" / "notes.txt"
@@ -199,6 +199,12 @@ pub enum StmtKind {
     Style(String, Vec<(String, Expr)>, Vec<(String, Vec<(String, Expr)>)>),
     Gui(DeclNode),
     On(Expr, Rc<Vec<Stmt>>),
+    /// on hero touches coin [as a, b] / on Bullet stops touching Enemy - once per pair, when it starts (or stops)
+    OnTouch { a: Expr, b: Expr, names: Option<(String, String)>, start: bool, body: Rc<Vec<Stmt>> },
+    /// on event "boss_dead" [as info]
+    OnEvent { name: String, var: Option<String>, body: Rc<Vec<Stmt>> },
+    /// trigger "boss_dead" [with value]
+    Trigger(String, Option<Expr>),
     Persist { body: Vec<Stmt>, steps: Option<Expr>, until: Option<Expr> },
     Mimic(String, Expr, Rc<Vec<Stmt>>),
     Tick(Option<Expr>),

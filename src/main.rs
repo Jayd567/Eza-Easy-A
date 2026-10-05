@@ -13,6 +13,7 @@ mod parser;
 mod suggest;
 mod tools;
 mod two_d;
+mod types;
 mod physics;
 mod value;
 
@@ -31,7 +32,7 @@ usage:
   eza play <file.eza> same as `eza <file.eza>`
   eza run <file.eza>  run a script without ever opening a window
                       (words after the file name reach the script as `args`)
-  eza check <file>    find mistakes (typos, wrong argument counts, ...) without running
+  eza check <file>    find mistakes (typos, wrong kinds of values, wrong argument counts, ...) without running
   eza test [path]     run the `test` blocks in a file or every .eza file in a folder
   eza build <file>    make dist/<name>/ with <name>.exe, to share without installing Eza
   eza explain E003    explain an error code in detail (`eza explain` lists them)
@@ -192,9 +193,11 @@ fn run(args: Vec<String>) -> i32 {
         }
         Some("check") => {
             // --plain: one line per problem with exact columns (what the VS Code extension reads)
+            // --stdin: check the text piped in as if it were that file (an editor's unsaved changes)
             let plain = args.iter().any(|a| a == "--plain");
-            match args.iter().skip(1).find(|a| *a != "--plain") {
-                Some(f) => check(f, plain),
+            let stdin = args.iter().any(|a| a == "--stdin");
+            match args.iter().skip(1).find(|a| !a.starts_with("--")) {
+                Some(f) => check(f, plain, stdin),
                 None => {
                     eprintln!("{}", USAGE);
                     2
@@ -294,8 +297,15 @@ fn read(path: &str) -> Option<String> {
     }
 }
 
-fn check(path: &str, plain: bool) -> i32 {
-    let diags = check::check_file(path);
+fn check(path: &str, plain: bool, stdin: bool) -> i32 {
+    let diags = if stdin {
+        let mut text = String::new();
+        let _ = std::io::Read::read_to_string(&mut std::io::stdin(), &mut text);
+        diagnose::use_text_for(path, text.clone());
+        check::check_text(path, text)
+    } else {
+        check::check_file(path)
+    };
     for d in &diags {
         if plain {
             eprintln!("{}", diagnose::plain(d));

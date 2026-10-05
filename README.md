@@ -39,6 +39,14 @@ rewind goblin by 1 step
 print(goblin.hp)                                   # 100 - back in time
 ```
 
+A coin that disappears when the hero touches it, in a 2D game:
+
+```eza
+on hero touches Coin as h, coin
+    destroy coin
+    change score by 1
+```
+
 A window with a working button takes six lines:
 
 ```eza
@@ -56,12 +64,12 @@ gui window "counter" centered=true gap=12
 
 | | |
 |---|---|
-| **Games** | 3D `scene`s and 2D `stage`s with sprites, tilemaps, physics, particles, sound, `spawn`/`destroy`, smooth `tween`s |
+| **Games** | 3D `scene`s and 2D `stage`s with sprites, sprite animations, tilemaps, physics, particles, sound, smooth `tween`s, `spawn`/`destroy` (with `Enemy.all` and `spawn ... into list`), `on hero touches coin`, your own events (`trigger "won"`), and pathfinding around walls |
 | **Menus and apps** | `gui` windows with buttons, text boxes, sliders, checkboxes, dropdowns, `style`s and charts |
 | **Everyday tools** | files and folders, CSV, JSON, `fetch` from the web, `database`, dates, running other programs, command-line `args` |
 | **Bigger programs** | functions, classes (`data` with methods, `from`, `super`), modules (`use "file.eza"`), tests (`eza test`) |
 | **Time travel** | `rewind`, `persist` (changes that undo themselves), `mimic` (predict the future), and the F1 debugger |
-| **Help with mistakes** | Errors underline the exact spot, show the values involved and **how they got that way** (from the change history), and suggest a fix. Games pause on the frame it went wrong, so you can step back and watch. `eza check` finds mistakes before running; `eza explain E003` explains any error |
+| **Help with mistakes** | Errors underline the exact spot, show the values involved and **how they got that way** (from the change history), and suggest a fix. Games pause on the frame it went wrong, so you can step back and watch. `eza check` finds mistakes before running, including the wrong kind of value (`score - "5"`, `name.uper()`, `goblin.nmae`) without you ever writing types, and VS Code shows them while you type; `eza explain E003` explains any error |
 | **Sharing** | `eza build game.eza` makes a `.exe` your friends can run without installing anything |
 
 ## Commands

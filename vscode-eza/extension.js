@@ -28,7 +28,19 @@ const KEYWORDS = {
   handle: '`handle error` runs when the attempt failed. `error` holds the message.',
   include: 'Run another file; its names become yours.  `include "scripts/core/player.eza"`  (to keep them separate, use `use`)',
   use: 'Load a module: a file whose names stay in their own box.  `use "enemies.eza"` then `enemies.make("orc")`. `use "lib/tools.eza" as t` picks the name. Runs once; names starting with _ are private; only the module\'s own code can change its variables.',
-  as: '`use "lib/enemy_tools.eza" as foes` - the name to reach the module by.',
+  as: '`use "lib/enemy_tools.eza" as foes` - the name to reach the module by. Also `on Bullet touches Enemy as b, e` names the pair, and `on event "x" as info` names the value.',
+  touches: '`on hero touches coin` runs once each time they start touching. Either side can be an object, a list, or a prefab (every live copy): `on Bullet touches Enemy as b, e` then use b and e.',
+  stops: '`on hero stops touching water` runs once each time they stop touching.',
+  touching: '`on hero stops touching water` runs once each time they stop touching.',
+  trigger: '`trigger "boss_dead"` runs every `on event "boss_dead"` block right away. `trigger "scored" with 10` hands them a value.',
+  event: '`on event "boss_dead"` runs when something does `trigger "boss_dead"`. `on event "scored" as points` gets the value given with `with`.',
+  into: '`spawn Coin at 10,20 into coins` also adds the new copy to the list coins; destroying it takes it out again.',
+  animation: 'A sprite plays these frames: `animation=[1, 2, 3]` or the name of one of its `animations`: `change hero.animation to "walk"`. `fps=10` sets the speed (default 8), `loop=false` plays once (then `.animation_done` is true).',
+  animations: 'Named frame lists for a sprite: `animations={idle: [0], walk: [1, 2, 0]}`, then `change hero.animation to "walk"`.',
+  fps: 'How many animation frames per second a sprite plays (default 8).',
+  find_path: 'find_path(grid, [col, row], [col, row]) - the cells to walk through, around walls ("#" in text rows, or true/1 in lists). none if there is no way. Add `true` for diagonal steps.',
+  path_to: 'level.path_to(from, to) on a tilemap - world points to walk through around solid tiles (none if there is no way). Follow them with .move_toward.',
+  move_toward: 'pos.move_toward(target, step) - a point at most `step` closer to target (never past it).  `change slime.position to slime.position.move_toward(next, 2)`',
   args: '`args` - the words typed after the script\'s name, as a list of text: `eza tool.eza a b` gives ["a", "b"]. Built programs get them too.',
   param: 'A global setting.  `param mimic_budget = 1000`',
   scene: 'Declare a 3D scene: indented nodes like `plane width=10 height=10 seg=64`.',
@@ -261,8 +273,9 @@ function activate(context) {
   const same = (a, b) => path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase();
   const check = (doc) => {
     if (doc.languageId !== 'eza' || doc.uri.scheme !== 'file') return;
-    // `eza check --plain` lists every problem it finds, one per line: file:line[:col:endcol]: message
-    execFile(exePath(), ['check', '--plain', doc.fileName], { cwd: path.dirname(doc.fileName) }, (_err, _stdout, stderr) => {
+    // `eza check --plain` lists every problem it finds, one per line: file:line[:col:endcol]: message.
+    // --stdin checks the editor's text, so problems show up while typing, before saving.
+    const child = execFile(exePath(), ['check', '--plain', '--stdin', doc.fileName], { cwd: path.dirname(doc.fileName) }, (_err, _stdout, stderr) => {
       const list = [];
       for (const m of (stderr || '').matchAll(/\[(Syntax|Runtime|Check) (Error|Warning)\] (.*?):(\d+)(?::(\d+):(\d+))?: (.*)/g)) {
         // only problems in this file (eza check also reports included files and modules)
@@ -278,7 +291,16 @@ function activate(context) {
       }
       diags.set(doc.uri, list);
     });
+    child.stdin.end(doc.getText());
   };
+  // while typing: check once the typing pauses for a moment
+  const timers = new Map();
+  context.subscriptions.push(vscode.workspace.onDidChangeTextDocument((e) => {
+    const doc = e.document;
+    if (doc.languageId !== 'eza') return;
+    clearTimeout(timers.get(doc.uri.toString()));
+    timers.set(doc.uri.toString(), setTimeout(() => check(doc), 600));
+  }));
   context.subscriptions.push(vscode.workspace.onDidSaveTextDocument(check));
   context.subscriptions.push(vscode.workspace.onDidOpenTextDocument(check));
   vscode.workspace.textDocuments.forEach(check);

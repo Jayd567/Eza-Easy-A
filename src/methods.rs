@@ -8,7 +8,7 @@ pub const BUILTINS: &[&str] = &[
     "print", "len", "str", "num", "int", "range", "random", "random_int", "input", "type", "sin", "cos", "tan", "asin",
     "acos", "atan", "atan2", "radians", "degrees", "distance", "lerp", "chr", "ord", "stack", "queue", "exists", "raycast",
     "now", "today", "date", "fetch", "database", "files", "folders", "find_files", "file_info", "is_folder", "make_folder",
-    "copy_file", "move_file", "delete_file", "delete_folder", "run",
+    "copy_file", "move_file", "delete_file", "delete_folder", "run", "find_path",
 ];
 
 /// A number or a list of numbers, as a vector.
@@ -124,6 +124,47 @@ pub fn builtin(it: &mut Interp, name: &str, args: Vec<Value>, named: Vec<(String
             let mut o = Obj::new(name);
             o.set("items", Value::list(items));
             Value::obj(o)
+        }
+        "find_path" => {
+            // find_path(grid, [col, row], [col, row], diagonal): walls are "#" in text rows, or true / 1 in lists
+            let grid: Vec<Vec<bool>> = match arg(it, &args, 0, name)? {
+                Value::List(rows) => {
+                    let mut g = vec![];
+                    for r in rows.iter() {
+                        g.push(match r {
+                            Value::Str(t) => t.chars().map(|c| c == '#').collect(),
+                            Value::List(cells) => cells
+                                .iter()
+                                .map(|c| match c {
+                                    Value::Bool(b) => *b,
+                                    Value::Num(n) => *n != 0.0,
+                                    Value::Str(t) => t == "#",
+                                    _ => false,
+                                })
+                                .collect(),
+                            v => return err(it, format!("find_path needs a grid: a list of text rows like \"..#..\", or a list of lists, but a row is {}", v.type_name())),
+                        });
+                    }
+                    g
+                }
+                v => return err(it, format!("find_path needs a grid (a list of rows) first, got {}", v.type_name())),
+            };
+            let cell = |i: usize, what: &str| -> R<(i64, i64)> {
+                let v = vec_arg(it, &args, i, name)?;
+                if v.len() != 2 {
+                    return err(it, format!("find_path needs the {} as [column, row]", what));
+                }
+                Ok((v[0].round() as i64, v[1].round() as i64))
+            };
+            let (from, to) = (cell(1, "start")?, cell(2, "goal")?);
+            let diagonal = args.get(3).map_or(false, |v| v.truthy());
+            let h = grid.len();
+            let w = grid.iter().map(|r| r.len()).max().unwrap_or(0);
+            let blocked = |c: i64, r: i64| grid.get(r as usize).and_then(|row| row.get(c as usize)).copied().unwrap_or(false);
+            match astar(w, h, from, to, diagonal, blocked) {
+                Some(path) => Value::list(path.into_iter().map(|(c, r)| Value::list(vec![Value::Num(c as f64), Value::Num(r as f64)])).collect()),
+                None => Value::None,
+            }
         }
         "now" => crate::tools::now(),
         "today" => crate::tools::today(),
@@ -279,6 +320,39 @@ pub fn call(it: &mut Interp, recv: Value, name: &str, args: Vec<Value>, called: 
                     [(p[0] - cam[0]) * zoom + w / 2.0, h / 2.0 - (p[1] - cam[1]) * zoom]
                 };
                 Ok(Some(Value::list(vec![Value::Num(out[0]), Value::Num(out[1])])))
+            }
+            "path_to" if o.type_name == "tilemap" => {
+                // level.path_to(from, to [, diagonal]): world points to walk through, around solid tiles
+                let (a, b) = (vec_arg(it, &args, 0, name)?, vec_arg(it, &args, 1, name)?);
+                if a.len() != 2 || b.len() != 2 {
+                    return err(it, ".path_to needs two 2D points, like  level.path_to(slime.position, hero.position)");
+                }
+                let diagonal = args.get(2).map_or(false, |v| v.truthy());
+                let Some(Value::List(grid)) = o.get("grid") else { return Ok(Value::None) };
+                let p = crate::two_d::vec2(o.get("position")).unwrap_or([0.0, 0.0]);
+                let ts = match o.get("tile_size") {
+                    Some(Value::Num(t)) if *t > 0.0 => *t,
+                    _ => 32.0,
+                };
+                let solid = !matches!(o.get("solid"), Some(Value::Bool(false)));
+                let rows: Vec<Vec<bool>> = grid
+                    .iter()
+                    .map(|r| match r {
+                        Value::List(cells) => cells.iter().map(|c| solid && matches!(c, Value::Num(n) if *n >= 0.0)).collect(),
+                        _ => vec![],
+                    })
+                    .collect();
+                let to_cell = |q: &[f64]| (((q[0] - p[0]) / ts).floor() as i64, ((p[1] - q[1]) / ts).floor() as i64);
+                let (h, w) = (rows.len(), rows.iter().map(|r| r.len()).max().unwrap_or(0));
+                let blocked = |c: i64, r: i64| rows.get(r as usize).and_then(|row| row.get(c as usize)).copied().unwrap_or(false);
+                Ok(Some(match astar(w, h, to_cell(&a), to_cell(&b), diagonal, blocked) {
+                    Some(path) => Value::list(
+                        path.into_iter()
+                            .map(|(c, r)| Value::list(vec![Value::Num(p[0] + (c as f64 + 0.5) * ts), Value::Num(p[1] - (r as f64 + 0.5) * ts)]))
+                            .collect(),
+                    ),
+                    None => Value::None,
+                }))
             }
             "tile_at" if o.type_name == "tilemap" => {
                 let p = vec_arg(it, &args, 0, name)?;
@@ -503,6 +577,22 @@ fn list_method(it: &mut Interp, l: &[Value], name: &str, args: &[Value]) -> R<Op
             Value::list(vec![Value::Num(v[0] * c - v[1] * s), Value::Num(v[0] * s + v[1] * c)]).some()
         }
         "magnitude" => Value::Num(nums(it)?.iter().map(|x| x * x).sum::<f64>().sqrt()).some(),
+        // pos.move_toward(target, step): at most `step` closer, never past it
+        "move_toward" => {
+            let (a, b) = (nums(it)?, vec_arg(it, args, 0, name)?);
+            if a.len() != b.len() {
+                return err(it, ".move_toward needs two vectors of the same size");
+            }
+            let step = arg_num(it, args, 1, name)?;
+            let d: Vec<f64> = a.iter().zip(&b).map(|(x, y)| y - x).collect();
+            let len = d.iter().map(|x| x * x).sum::<f64>().sqrt();
+            let out: Vec<Value> = if len <= step || len == 0.0 {
+                b.iter().map(|x| Value::Num(*x)).collect()
+            } else {
+                a.iter().zip(&d).map(|(x, dx)| Value::Num(x + dx / len * step)).collect()
+            };
+            Value::list(out).some()
+        }
         "normalize" => {
             let v = nums(it)?;
             let m = v.iter().map(|x| x * x).sum::<f64>().sqrt();
@@ -694,7 +784,7 @@ pub fn aabb_with(o: &Obj, physical: bool) -> Option<([f64; 3], [f64; 3])> {
     Some((pos, [half[0] * scale[0].abs(), half[1] * scale[1].abs(), half[2] * scale[2].abs()]))
 }
 
-fn collides(it: &Interp, a: &Obj, target: &Value) -> R<bool> {
+pub fn collides(it: &Interp, a: &Obj, target: &Value) -> R<bool> {
     match target {
         Value::List(items) => {
             for t in items.iter() {
@@ -741,4 +831,66 @@ fn image_method(it: &Interp, img: &ImageData, name: &str, args: &[Value]) -> R<O
         }
         _ => Ok(None),
     }
+}
+
+/// A* over a grid of cells (column, row): the cells to walk through after `from`, ending at `to`.
+/// None when there's no way through (or `to` is a wall). Diagonal steps never cut a wall's corner.
+fn astar(w: usize, h: usize, from: (i64, i64), to: (i64, i64), diagonal: bool, blocked: impl Fn(i64, i64) -> bool) -> Option<Vec<(i64, i64)>> {
+    use std::cmp::Reverse;
+    use std::collections::{BinaryHeap, HashMap};
+    let inside = |c: i64, r: i64| c >= 0 && r >= 0 && (c as usize) < w && (r as usize) < h;
+    if !inside(to.0, to.1) || blocked(to.0, to.1) || !inside(from.0, from.1) {
+        return None;
+    }
+    if from == to {
+        return Some(vec![]);
+    }
+    // costs in tenths: 10 straight, 14 diagonal
+    let guess = |c: i64, r: i64| {
+        let (dx, dy) = ((c - to.0).abs(), (r - to.1).abs());
+        if diagonal { 10 * dx.max(dy) + 4 * dx.min(dy) } else { 10 * (dx + dy) }
+    };
+    let mut open = BinaryHeap::new();
+    let mut cost: HashMap<(i64, i64), i64> = HashMap::new();
+    let mut came: HashMap<(i64, i64), (i64, i64)> = HashMap::new();
+    cost.insert(from, 0);
+    open.push(Reverse((guess(from.0, from.1), 0i64, from)));
+    let mut steps: Vec<(i64, i64, i64)> = vec![(1, 0, 10), (-1, 0, 10), (0, 1, 10), (0, -1, 10)];
+    if diagonal {
+        steps.extend([(1, 1, 14), (1, -1, 14), (-1, 1, 14), (-1, -1, 14)]);
+    }
+    while let Some(Reverse((_, g, cur))) = open.pop() {
+        if cur == to {
+            let mut path = vec![to];
+            let mut at = to;
+            while let Some(&prev) = came.get(&at) {
+                if prev == from {
+                    break;
+                }
+                path.push(prev);
+                at = prev;
+            }
+            path.reverse();
+            return Some(path);
+        }
+        if g > *cost.get(&cur).unwrap_or(&i64::MAX) {
+            continue;
+        }
+        for &(dx, dy, c) in &steps {
+            let (nc, nr) = (cur.0 + dx, cur.1 + dy);
+            if !inside(nc, nr) || blocked(nc, nr) {
+                continue;
+            }
+            if dx != 0 && dy != 0 && (blocked(cur.0 + dx, cur.1) || blocked(cur.0, cur.1 + dy)) {
+                continue;
+            }
+            let ng = g + c;
+            if ng < *cost.get(&(nc, nr)).unwrap_or(&i64::MAX) {
+                cost.insert((nc, nr), ng);
+                came.insert((nc, nr), cur);
+                open.push(Reverse((ng + guess(nc, nr), ng, (nc, nr))));
+            }
+        }
+    }
+    None
 }

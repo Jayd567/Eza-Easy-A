@@ -399,8 +399,38 @@ impl Parser {
             }
             "on" => {
                 self.next();
+                // on event "boss_dead" [as info]
+                if self.is_kw("event") && matches!(self.peek_n(1), Tok::Str(_)) {
+                    self.next();
+                    let Tok::Str(name) = self.next() else { unreachable!() };
+                    let var = if self.eat_kw("as") { Some(self.ident()?) } else { None };
+                    return Ok(Stmt { line, kind: StmtKind::OnEvent { name, var, body: Rc::new(self.block()?) } });
+                }
                 let e = self.expr()?;
+                // on hero touches coin / on Bullet stops touching Enemy as b, e
+                let start = self.is_kw("touches");
+                if start || (self.is_kw("stops") && matches!(self.peek_n(1), Tok::Ident(w) if w == "touching")) {
+                    self.next();
+                    if !start {
+                        self.next();
+                    }
+                    let b = self.expr()?;
+                    let names = if self.eat_kw("as") {
+                        let first = self.ident()?;
+                        let second = if self.eat_sym(",") { self.ident()? } else { String::new() };
+                        Some((first, second))
+                    } else {
+                        None
+                    };
+                    return Ok(Stmt { line, kind: StmtKind::OnTouch { a: e, b, names, start, body: Rc::new(self.block()?) } });
+                }
                 StmtKind::On(e, Rc::new(self.block()?))
+            }
+            "trigger" if matches!(self.peek_n(1), Tok::Str(_)) => {
+                self.next();
+                let Tok::Str(name) = self.next() else { unreachable!() };
+                let value = if self.eat_kw("with") { Some(self.expr()?) } else { None };
+                StmtKind::Trigger(name, value)
             }
             "persist" => self.persist()?,
             "mimic" => {
@@ -873,6 +903,10 @@ impl Parser {
     }
 
     fn prop_atom(&mut self) -> R<Expr> {
+        // animations={walk: [1, 2], idle: [0]}
+        if self.is_sym("{") {
+            return self.primary();
+        }
         Ok(match self.next() {
             Tok::Num(n) => Expr::Num(n),
             Tok::Str(s) => Expr::Str(s),
@@ -1101,7 +1135,17 @@ impl Parser {
             self.next();
             props.push((k, self.expr()?));
         }
-        Ok(Expr::Spawn { prefab: Box::new(Expr::Ident(name)), at, props })
+        // into enemies: also add it to that list (destroy takes it out again)
+        let into = if self.eat_kw("into") {
+            let target = self.postfix()?;
+            if root_name(&target).is_none() {
+                return self.err_prev("into needs a list variable, like:  spawn Coin into coins");
+            }
+            Some(Box::new(target))
+        } else {
+            None
+        };
+        Ok(Expr::Spawn { prefab: Box::new(Expr::Ident(name)), at, props, into })
     }
 
     fn primary(&mut self) -> R<Expr> {

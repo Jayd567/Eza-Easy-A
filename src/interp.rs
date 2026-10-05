@@ -261,6 +261,8 @@ pub struct EntityHandle {
 pub struct DynEntity {
     pub var: VarRef,
     pub alive: bool,
+    /// lists it was put in with `spawn ... into list` (destroy takes it out again)
+    groups: Vec<(VarRef, Vec<PathEl>)>,
 }
 
 /// Follows an entity handle to the object it points at.
@@ -507,6 +509,31 @@ struct Handler {
     broken: bool,
 }
 
+/// `on a touches b [as x, y]` / `on a stops touching b`: fires once per pair of objects.
+struct TouchHandler {
+    a: Expr,
+    b: Expr,
+    names: Option<(String, String)>,
+    start: bool,
+    body: Rc<Vec<Stmt>>,
+    scope: Rc<Scope>,
+    has_wait: bool,
+    line: usize,
+    file: u16,
+    broken: bool,
+    /// the pairs that were touching last frame
+    pairs: HashSet<(String, String)>,
+}
+
+/// `on event "boss_dead" [as info]`
+struct EventHandler {
+    name: String,
+    var: Option<String>,
+    body: Rc<Vec<Stmt>>,
+    scope: Rc<Scope>,
+    has_wait: bool,
+}
+
 struct MimicJob {
     shadow: String,
     obj: Obj,
@@ -544,6 +571,10 @@ pub struct Interp {
     persists: Vec<PersistLayer>,
     tweens: Vec<Tween>,
     handlers: Vec<Handler>,
+    touch_handlers: Vec<TouchHandler>,
+    event_handlers: Vec<EventHandler>,
+    /// sprite animations: the variable's address -> (the animation it is playing, the frame it started on)
+    anims: HashMap<usize, (String, u64)>,
     current_on: Option<(Expr, Rc<Scope>)>,
     /// shadows that finished and are readable until the next frame
     shadows: Vec<String>,
@@ -620,6 +651,9 @@ impl Interp {
             persists: vec![],
             tweens: vec![],
             handlers: vec![],
+            touch_handlers: vec![],
+            event_handlers: vec![],
+            anims: HashMap::new(),
             current_on: None,
             shadows: vec![],
             mimic_queue: vec![],
@@ -1075,6 +1109,33 @@ impl Interp {
                 file: self.cur_file,
                 broken: false,
             }),
+            StmtKind::OnTouch { a, b, names, start, body } => self.touch_handlers.push(TouchHandler {
+                a: a.clone(),
+                b: b.clone(),
+                names: names.clone(),
+                start: *start,
+                body: body.clone(),
+                scope: scope.clone(),
+                has_wait: block_has_wait(body),
+                line: s.line,
+                file: self.cur_file,
+                broken: false,
+                pairs: HashSet::new(),
+            }),
+            StmtKind::OnEvent { name, var, body } => self.event_handlers.push(EventHandler {
+                name: name.clone(),
+                var: var.clone(),
+                body: body.clone(),
+                scope: scope.clone(),
+                has_wait: block_has_wait(body),
+            }),
+            StmtKind::Trigger(name, value) => {
+                let v = match value {
+                    Some(e) => self.eval(e, scope)?,
+                    None => Value::None,
+                };
+                self.trigger(name, v)?;
+            }
             StmtKind::Persist { body, steps, until } => {
                 let prev = self.capture.replace(vec![]);
                 let r = self.exec_child(body, scope);
@@ -1966,7 +2027,7 @@ impl Interp {
 
     // ---------- spawn / destroy ----------
 
-    fn spawn(&mut self, prefab: &Expr, at: &Option<Box<Expr>>, props: &[(String, Expr)], scope: &Rc<Scope>) -> R<Value> {
+    fn spawn(&mut self, prefab: &Expr, at: &Option<Box<Expr>>, props: &[(String, Expr)], into: &Option<Box<Expr>>, scope: &Rc<Scope>) -> R<Value> {
         if self.in_mimic {
             return self.rt("can't spawn inside a mimic block (it would change the real world)");
         }
@@ -1988,8 +2049,8 @@ impl Interp {
             _ => return self.rt("this prefab didn't build an object"),
         };
         if let Some(a) = at_v {
-            if !matches!(&a, Value::List(l) if l.len() == 3 && l.iter().all(|x| matches!(x, Value::Num(_)))) {
-                return self.rt("'at' needs a position like 5,0,3 (or a vector with 3 numbers)");
+            if !matches!(&a, Value::List(l) if (l.len() == 2 || l.len() == 3) && l.iter().all(|x| matches!(x, Value::Num(_)))) {
+                return self.rt("'at' needs a position like 5,0,3 (or 120,40 in 2D), or a vector");
             }
             o.set("position", a);
         }
@@ -2001,8 +2062,58 @@ impl Interp {
         let id = self.next_entity;
         self.next_entity += 1;
         let var = self.new_var(Value::obj(o));
-        self.entities.insert(id, DynEntity { var: var.clone(), alive: true });
-        Ok(Value::Entity(Rc::new(EntityHandle { id, var })))
+        let handle = Value::Entity(Rc::new(EntityHandle { id, var: var.clone() }));
+        let mut groups = vec![];
+        if let Some(target) = into {
+            // spawn Coin into coins: add it to that list too
+            let (name, path) = self.lvalue(target, scope)?;
+            let Some(list_var) = scope.lookup(name) else {
+                return self.rt(format!("'{0}' doesn't exist yet - make an empty list first:  {0} = []", name));
+            };
+            let list_var = if path.is_empty() { list_var } else { deref_var(list_var) };
+            let root = list_var.borrow().get().clone();
+            let mut items = match get_path(&root, &path, self.line)? {
+                Value::List(l) => (*l).clone(),
+                other => return self.rt(format!("into needs a list, but {} is {}", crate::diagnose::code(target), other.type_name())),
+            };
+            items.push(handle.clone());
+            let nr = set_path(root, &path, Value::list(items), self.line)?;
+            self.commit(&list_var, nr);
+            groups.push((list_var, path));
+        }
+        self.entities.insert(id, DynEntity { var, alive: true, groups });
+        Ok(handle)
+    }
+
+    /// The live objects spawned from one prefab (`Bullet.all`), oldest first.
+    fn live_copies(&self, prefab: &str) -> Vec<Value> {
+        self.entities
+            .iter()
+            .filter(|(_, d)| d.alive && matches!(d.var.borrow().get(), Value::Obj(o) if matches!(o.get("prefab"), Some(Value::Str(p)) if p == prefab)))
+            .map(|(id, d)| Value::Entity(Rc::new(EntityHandle { id: *id, var: d.var.clone() })))
+            .collect()
+    }
+
+    /// Marks a spawned object dead and takes it out of the lists it was spawned `into`.
+    fn kill_entity(&mut self, id: u64) -> R<()> {
+        let groups = match self.entities.get_mut(&id) {
+            Some(d) if d.alive => {
+                d.alive = false;
+                std::mem::take(&mut d.groups)
+            }
+            _ => return Ok(()),
+        };
+        for (var, path) in groups {
+            let root = var.borrow().get().clone();
+            let Ok(Value::List(l)) = get_path(&root, &path, self.line) else { continue };
+            if !l.iter().any(|v| matches!(v, Value::Entity(h) if h.id == id)) {
+                continue;
+            }
+            let kept: Vec<Value> = l.iter().filter(|v| !matches!(v, Value::Entity(h) if h.id == id)).cloned().collect();
+            let nr = set_path(root, &path, Value::list(kept), self.line)?;
+            self.commit(&var, nr);
+        }
+        Ok(())
     }
 
     fn destroy(&mut self, e: &Expr, scope: &Rc<Scope>) -> R<()> {
@@ -2011,8 +2122,17 @@ impl Interp {
         }
         match self.eval(e, scope)? {
             Value::Entity(h) => {
-                if let Some(d) = self.entities.get_mut(&h.id) {
-                    d.alive = false;
+                self.kill_entity(h.id)?;
+                if !self.frame_mode {
+                    self.entities.retain(|_, d| d.alive);
+                }
+            }
+            // destroy Bullet.all / destroy coins: every spawned object in the list
+            Value::List(items) if items.iter().all(|v| matches!(v, Value::Entity(_))) => {
+                for v in items.iter() {
+                    if let Value::Entity(h) = v {
+                        self.kill_entity(h.id)?;
+                    }
                 }
                 if !self.frame_mode {
                     self.entities.retain(|_, d| d.alive);
@@ -2031,7 +2151,7 @@ impl Interp {
                 }
                 self.bodies.retain(|b| *b != name);
             }
-            Value::List(_) => return self.rt("destroy needs one object; use each to destroy several"),
+            Value::List(_) => return self.rt("destroy takes a list only when it holds spawned objects; for things declared in the scene, destroy them one at a time with each"),
             other => return self.rt(format!("can't destroy {}", other.type_name())),
         }
         Ok(())
@@ -2405,6 +2525,7 @@ impl Interp {
                 i += 1;
             }
         }
+        self.animate_sprites()?;
         // `on scene.ticks` runs every frame; other `on` conditions fire once each time they become true
         let n = self.handlers.len();
         for i in 0..n {
@@ -2432,6 +2553,30 @@ impl Interp {
                 }
                 // in a running game, only this `on` block stops; the rest carries on
                 self.handlers[i].broken = true;
+                e.context.push("that `on` block is switched off now; the rest of the game keeps running".to_string());
+                self.errors.push(e);
+            }
+        }
+        for i in 0..self.touch_handlers.len() {
+            if self.touch_handlers[i].broken {
+                continue;
+            }
+            let (file, line) = (self.touch_handlers[i].file, self.touch_handlers[i].line);
+            let outer = std::mem::replace(&mut self.cur_file, file);
+            let r = self.run_touch(i);
+            self.cur_file = outer;
+            if let Err(e) = r {
+                if e.is_switch() {
+                    return Err(e);
+                }
+                let h = &self.touch_handlers[i];
+                let what = format!("{} {} {}", crate::diagnose::code(&h.a), if h.start { "touches" } else { "stops touching" }, crate::diagnose::code(&h.b));
+                let mut e = e.in_file(self.file_name(file));
+                e.context.push(format!("on frame {} ({:.1} s in), inside  on {}  (line {})", self.frame, self.frame as f64 / 60.0, what, line));
+                if !self.frame_mode {
+                    return Err(e);
+                }
+                self.touch_handlers[i].broken = true;
                 e.context.push("that `on` block is switched off now; the rest of the game keeps running".to_string());
                 self.errors.push(e);
             }
@@ -2485,6 +2630,198 @@ impl Interp {
             };
             self.current_on = prev;
             r?;
+        }
+        Ok(())
+    }
+
+    /// One side of `on a touches b`: (a key that stays the same while it lives, the value to hand the block, its data).
+    fn touch_side(&mut self, e: &Expr, scope: &Rc<Scope>) -> R<Vec<(String, Value, Rc<Obj>)>> {
+        let v = self.eval(e, scope)?;
+        let mut out = vec![];
+        let alive = |o: &Obj| !matches!(o.get("destroyed"), Some(Value::Bool(true)));
+        let add = |it: &Self, v: &Value, fallback: String, out: &mut Vec<(String, Value, Rc<Obj>)>| match v {
+            Value::Entity(h) => {
+                if it.entities.get(&h.id).map_or(false, |d| d.alive) {
+                    if let Value::Obj(o) = h.var.borrow().get() {
+                        out.push((format!("#{}", h.id), v.clone(), o.clone()));
+                    }
+                }
+            }
+            Value::Obj(o) if alive(o) => {
+                let key = match o.get("name") {
+                    Some(Value::Str(n)) => format!("n:{}", n),
+                    _ => fallback,
+                };
+                out.push((key, v.clone(), o.clone()));
+            }
+            _ => {}
+        };
+        match &v {
+            Value::Prefab(def) => {
+                for c in self.live_copies(&def.name) {
+                    add(self, &c, String::new(), &mut out);
+                }
+            }
+            Value::List(items) => {
+                for (i, x) in items.iter().enumerate() {
+                    if !matches!(x, Value::Obj(_) | Value::Entity(_)) {
+                        return self.rt(format!("touches needs objects, but {} has {} in it", crate::diagnose::code(e), x.type_name()));
+                    }
+                    add(self, x, format!("{}[{}]", crate::diagnose::code(e), i), &mut out);
+                }
+            }
+            Value::Obj(_) | Value::Entity(_) => add(self, &v, crate::diagnose::code(e), &mut out),
+            other => {
+                return self.rt(format!(
+                    "touches needs an object, a list of objects or a prefab (for every copy), but {} is {}",
+                    crate::diagnose::code(e),
+                    other.type_name()
+                ))
+            }
+        }
+        Ok(out)
+    }
+
+    /// Checks which pairs touch now and runs the block for each pair that just started (or stopped) touching.
+    fn run_touch(&mut self, i: usize) -> R<()> {
+        let (a, b, sc) = {
+            let h = &self.touch_handlers[i];
+            (h.a.clone(), h.b.clone(), h.scope.clone())
+        };
+        let left = self.touch_side(&a, &sc)?;
+        let right = self.touch_side(&b, &sc)?;
+        let mut now = HashSet::new();
+        let mut found: Vec<(String, String, Value, Value)> = vec![];
+        for (ka, va, oa) in &left {
+            for (kb, vb, ob) in &right {
+                if ka == kb {
+                    continue;
+                }
+                if methods::collides(self, oa, &Value::Obj(ob.clone()))? {
+                    now.insert((ka.clone(), kb.clone()));
+                    found.push((ka.clone(), kb.clone(), va.clone(), vb.clone()));
+                }
+            }
+        }
+        let start = self.touch_handlers[i].start;
+        let before = std::mem::replace(&mut self.touch_handlers[i].pairs, now.clone());
+        let fire: Vec<(Value, Value)> = if start {
+            found.into_iter().filter(|(ka, kb, _, _)| !before.contains(&(ka.clone(), kb.clone()))).map(|(_, _, x, y)| (x, y)).collect()
+        } else {
+            // pairs that touched last frame and don't now, while both are still around
+            let mut out = vec![];
+            for (ka, kb) in before.difference(&now) {
+                let x = left.iter().find(|(k, _, _)| k == ka);
+                let y = right.iter().find(|(k, _, _)| k == kb);
+                if let (Some(x), Some(y)) = (x, y) {
+                    out.push((x.1.clone(), y.1.clone()));
+                }
+            }
+            out
+        };
+        for (x, y) in fire {
+            let (names, body, has_wait) = {
+                let h = &self.touch_handlers[i];
+                (h.names.clone(), h.body.clone(), h.has_wait)
+            };
+            let child = Scope::new(Some(sc.clone()));
+            if let Some((n1, n2)) = names {
+                child.insert(&n1, self.new_var(x));
+                if !n2.is_empty() {
+                    child.insert(&n2, self.new_var(y));
+                }
+            }
+            if has_wait {
+                self.spawn_task(body, child)?;
+            } else {
+                self.exec_block(&body, &child)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// `trigger "boss_dead" with info`: runs every `on event "boss_dead"` block right away.
+    fn trigger(&mut self, name: &str, v: Value) -> R<()> {
+        let matching: Vec<(Option<String>, Rc<Vec<Stmt>>, Rc<Scope>, bool)> = self
+            .event_handlers
+            .iter()
+            .filter(|h| h.name == name)
+            .map(|h| (h.var.clone(), h.body.clone(), h.scope.clone(), h.has_wait))
+            .collect();
+        for (var, body, sc, has_wait) in matching {
+            let child = Scope::new(Some(sc));
+            if let Some(n) = var {
+                child.insert(&n, self.new_var(v.clone()));
+            }
+            if has_wait {
+                self.spawn_task(body, child)?;
+            } else {
+                self.exec_block(&body, &child)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Sprites with `animation=[1, 2, 3]` (or the name of one of their `animations`) step through
+    /// those frames at `fps` frames per second (default 8), looping unless `loop=false`.
+    fn animate_sprites(&mut self) -> R<()> {
+        let mut vars: Vec<VarRef> = self.scene_names.iter().filter_map(|n| self.globals.lookup(n)).collect();
+        vars.extend(self.entities.values().filter(|d| d.alive).map(|d| d.var.clone()));
+        for var in vars {
+            let Value::Obj(o) = var.borrow().get().clone() else { continue };
+            if o.type_name != "sprite" {
+                continue; // on other objects `animation` is just a property
+            }
+            let Some(anim) = o.get("animation").cloned() else { continue };
+            let key = Rc::as_ptr(&var) as usize;
+            if matches!(anim, Value::None) {
+                self.anims.remove(&key);
+                continue;
+            }
+            let frames: Vec<f64> = match &anim {
+                Value::List(l) => l.iter().filter_map(|v| if let Value::Num(n) = v { Some(*n) } else { None }).collect(),
+                Value::Num(n) => vec![*n],
+                Value::Str(name) => match o.get("animations") {
+                    Some(Value::Obj(d)) => match d.get(name) {
+                        Some(Value::List(l)) => l.iter().filter_map(|v| if let Value::Num(n) = v { Some(*n) } else { None }).collect(),
+                        Some(Value::Num(n)) => vec![*n],
+                        _ => {
+                            let names: Vec<String> = d.fields.iter().map(|(k, _)| k.clone()).collect();
+                            let hint = crate::suggest::closest(name, &names).map(|c| format!(" - did you mean \"{}\"?", c)).unwrap_or_default();
+                            return self.rt(format!("{} has no animation called \"{}\"{} (it has: {})", o.type_name, name, hint, names.join(", ")));
+                        }
+                    },
+                    _ => return self.rt(format!("animation=\"{}\" needs the sprite to have animations={{{}: [0, 1, 2]}}", name, name)),
+                },
+                other => return self.rt(format!("animation needs a list of frame numbers like [0, 1, 2], got {}", other.type_name())),
+            };
+            if frames.is_empty() {
+                continue;
+            }
+            let id = anim.repr();
+            let start = match self.anims.get(&key) {
+                Some((k, st)) if *k == id => *st,
+                _ => {
+                    self.anims.insert(key, (id, self.frame));
+                    self.frame
+                }
+            };
+            let fps = match o.get("fps") {
+                Some(Value::Num(f)) if *f > 0.0 => *f,
+                _ => 8.0,
+            };
+            let looping = !matches!(o.get("loop"), Some(Value::Bool(false)));
+            let step = ((self.frame - start) as f64 * fps / 60.0).floor() as usize;
+            let (idx, done) = if looping { (step % frames.len(), false) } else { (step.min(frames.len() - 1), step >= frames.len()) };
+            let frame = Value::Num(frames[idx]);
+            let was_done = matches!(o.get("animation_done"), Some(Value::Bool(true)));
+            if o.get("frame").map_or(false, |f| equals(f, &frame)) && was_done == done {
+                continue;
+            }
+            let mut n = (*o).clone();
+            n.set("frame", frame);
+            n.set("animation_done", Value::Bool(done));
+            self.commit(&var, Value::obj(n));
         }
         Ok(())
     }
@@ -2654,6 +2991,13 @@ impl Interp {
             },
             Expr::Field(obj, name) => {
                 let o = self.eval(obj, scope)?;
+                if let Value::Prefab(def) = &o {
+                    match name.as_str() {
+                        "all" => return Ok(Value::list(self.live_copies(&def.name))),
+                        "count" => return Ok(Value::Num(self.live_copies(&def.name).len() as f64)),
+                        _ => return self.rt(format!("a prefab only has .all (its live copies) and .count, not '.{}'", name)),
+                    }
+                }
                 let o = if let Value::Entity(h) = &o {
                     if name == "alive" {
                         return Ok(Value::Bool(self.entities.get(&h.id).map_or(false, |e| e.alive)));
@@ -2754,7 +3098,7 @@ impl Interp {
                 }
             }
             Expr::Lambda(d) => Value::Func(Rc::new(Func { def: d.clone(), closure: scope.clone(), file: self.cur_file })),
-            Expr::Spawn { prefab, at, props } => self.spawn(prefab, at, props, scope)?,
+            Expr::Spawn { prefab, at, props, into } => self.spawn(prefab, at, props, into, scope)?,
             Expr::Dict(items) => {
                 let mut o = Obj::new("dict");
                 for (k, e) in items {

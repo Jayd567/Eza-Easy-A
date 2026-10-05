@@ -313,11 +313,21 @@ fn locate_name(line: &str, name: &str) -> Option<(usize, usize)> {
 
 // ---------- drawing ----------
 
+/// A file's text when it differs from what's on disk (an editor's unsaved changes, for `eza check --stdin`).
+static GIVEN: std::sync::OnceLock<(String, String)> = std::sync::OnceLock::new();
+
+pub fn use_text_for(file: &str, text: String) {
+    let _ = GIVEN.set((file.to_string(), text));
+}
+
 fn read_lines(file: &str) -> Option<Vec<String>> {
     if file.is_empty() || file.starts_with('<') {
         return None;
     }
-    let text = std::fs::read_to_string(file).ok()?;
+    let text = match GIVEN.get() {
+        Some((f, t)) if f == file => t.clone(),
+        _ => std::fs::read_to_string(file).ok()?,
+    };
     let text = text.strip_prefix('\u{feff}').map(|s| s.to_string()).unwrap_or(text);
     Some(text.lines().map(|l| l.to_string()).collect())
 }
@@ -575,6 +585,7 @@ pub const CODES: &[(&str, &str, &str)] = &[
     ("E018", "module problem", "A `use` line failed: the file is missing, two modules use each other, or a module's variable was changed from outside (only the module's own code may change its variables)."),
     ("E019", "expect failed", "An `expect` (in a test, or as a check in your code) wasn't true. The message shows the values on both sides."),
     ("E020", "nothing to pop", "`pop` took from an empty list, stack or queue. Check `.empty` or len(...) first."),
+    ("E021", "game object problem", "Something about prefabs, spawning, touching or sprite animations was used the wrong way: `on a touches b` needs objects, lists of objects or a prefab; a prefab only has `.all` and `.count` (spawn a copy to change one); `spawn ... into list` needs a list that already exists (`coins = []`); `animation` needs frame numbers like [0, 1, 2], or the name of one of the sprite's `animations`."),
 ];
 
 /// The code for an error, worked out from its message.
@@ -593,11 +604,13 @@ pub fn code_of(e: &EzaError) -> &'static str {
         _ if has("divide by zero") => "E003",
         _ if has("can't compare") => "E005",
         _ if has("can't use '") || has("can't change '") => "E004",
+        _ if has("can't add") || has("can't subtract") || has("can't multiply") || has("can't divide") || has("negative") => "E004",
+        _ if has("can't use [ ]") || has("needs a number in [ ]") || has("can't loop over") || has("can't go through") => "E004",
         _ if has("out of range") => "E006",
         _ if has("has no property") || has("there's no key") || has("has no field") => "E007",
         _ if has("has no method") || has("has no function") => "E008",
         _ if has("argument(s)") || has("is missing the argument") || has("only has") => "E009",
-        _ if has("is not a function") => "E010",
+        _ if has("is not a function") || has("not a function, so") => "E010",
         _ if has("expected a number") || has("isn't a number") || has("needs whole numbers") => "E011",
         _ if has("can't open") || has("can't find") || has("can't load") => "E012",
         _ if has("recursion") => "E014",
@@ -605,6 +618,7 @@ pub fn code_of(e: &EzaError) -> &'static str {
         _ if has("module") || has("can't use \"") => "E018",
         _ if has("expect failed") => "E019",
         _ if has("nothing to pop") => "E020",
+        _ if has("touches needs") || has("animation") || has("prefab only has") || has("into needs") || has("spawn needs a prefab") => "E021",
         _ => "",
     }
 }

@@ -32,9 +32,9 @@ fn names_in_expr(e: &Expr, out: &mut HashSet<String>) {
         Expr::List(items) => items.iter().for_each(|x| names_in_expr(x, out)),
         Expr::Dict(items) => items.iter().for_each(|(_, x)| names_in_expr(x, out)),
         Expr::Lambda(d) => names_in_stmts(&d.body, out),
-        Expr::Spawn { prefab, at, props } => {
+        Expr::Spawn { prefab, at, props, into } => {
             names_in_expr(prefab, out);
-            at.iter().for_each(|a| names_in_expr(a, out));
+            at.iter().chain(into.iter()).for_each(|a| names_in_expr(a, out));
             props.iter().for_each(|(_, x)| names_in_expr(x, out));
         }
         Expr::Num(_) | Expr::Str(_) | Expr::Bool(_) | Expr::None | Expr::Color(_) => {}
@@ -102,6 +102,13 @@ fn names_in_stmts(stmts: &[Stmt], out: &mut HashSet<String>) {
                 names_in_expr(x, out);
                 names_in_stmts(b, out);
             }
+            StmtKind::OnTouch { a, b, body, .. } => {
+                names_in_expr(a, out);
+                names_in_expr(b, out);
+                names_in_stmts(body, out);
+            }
+            StmtKind::OnEvent { body, .. } => names_in_stmts(body, out),
+            StmtKind::Trigger(_, v) => v.iter().for_each(|x| names_in_expr(x, out)),
             StmtKind::Persist { body, steps, until } => {
                 names_in_stmts(body, out);
                 steps.iter().chain(until.iter()).for_each(|x| names_in_expr(x, out));
@@ -171,6 +178,9 @@ struct Ctx {
     file: String,
     /// the define line of each function: name -> (line, file)
     def_lines: HashMap<String, (usize, String)>,
+    /// `on event "x"` and `trigger "x"` names: name -> where it first appears (line, file)
+    listened: HashMap<String, (usize, String)>,
+    triggered: HashMap<String, (usize, String)>,
 }
 
 /// `include "x.eza"` lines (line, path), looking inside nested blocks too.
@@ -210,14 +220,19 @@ fn uses(stmts: &[Stmt], out: &mut Vec<(usize, String, String)>) {
 }
 
 pub fn check_file(path: &str) -> Vec<Diag> {
-    check_file_seen(path, &mut HashSet::new())
+    check_file_seen(path, &mut HashSet::new(), None)
+}
+
+/// The same, with the file's text given (what an editor has, before it's saved).
+pub fn check_text(path: &str, text: String) -> Vec<Diag> {
+    check_file_seen(path, &mut HashSet::new(), Some(text))
 }
 
 /// `modules_done` holds the module files already checked, so each is reported once
 /// (and two modules that use each other don't loop forever).
-fn check_file_seen(path: &str, modules_done: &mut HashSet<PathBuf>) -> Vec<Diag> {
+fn check_file_seen(path: &str, modules_done: &mut HashSet<PathBuf>, text: Option<String>) -> Vec<Diag> {
     modules_done.insert(Path::new(path).canonicalize().unwrap_or_else(|_| PathBuf::from(path)));
-    let src = match std::fs::read_to_string(path) {
+    let src = match text.map(Ok).unwrap_or_else(|| std::fs::read_to_string(path)) {
         Ok(s) => s,
         Err(e) => return vec![EzaError::syntax(0, format!("can't open the file: {}", e)).in_file(path)],
     };
@@ -282,7 +297,7 @@ fn check_file_seen(path: &str, modules_done: &mut HashSet<PathBuf>) -> Vec<Diag>
             }
             let key = full.canonicalize().unwrap_or_else(|_| full.clone());
             if !modules_done.contains(&key) {
-                let more = check_file_seen(&full.display().to_string(), modules_done);
+                let more = check_file_seen(&full.display().to_string(), modules_done, None);
                 c.diags.extend(more);
             }
         }
@@ -292,6 +307,11 @@ fn check_file_seen(path: &str, modules_done: &mut HashSet<PathBuf>) -> Vec<Diag>
         c.file = file.clone();
         c.check_block(prog, &[]);
     }
+    c.check_events();
+    c.diags.extend(crate::types::check(&progs));
+    // in the order they appear: file by file, top to bottom
+    let order: Vec<String> = progs.iter().map(|(f, _)| f.clone()).collect();
+    c.diags.sort_by_key(|d| (order.iter().position(|f| *f == d.file).unwrap_or(usize::MAX), d.line));
     c.diags
 }
 
@@ -344,6 +364,26 @@ impl Ctx {
             }
             StmtKind::While(_, b) | StmtKind::Test(_, b) | StmtKind::Persist { body: b, .. } => self.collect(b),
             StmtKind::On(_, b) => self.collect(b),
+            StmtKind::OnTouch { names, body, .. } => {
+                if let Some((x, y)) = names {
+                    for n in [x, y].into_iter().filter(|n| !n.is_empty()) {
+                        self.names.insert(n.clone());
+                        self.binders.insert(n.clone());
+                    }
+                }
+                self.collect(body);
+            }
+            StmtKind::OnEvent { name, var, body } => {
+                self.listened.entry(name.clone()).or_insert((s.line, self.file.clone()));
+                if let Some(v) = var {
+                    self.names.insert(v.clone());
+                    self.binders.insert(v.clone());
+                }
+                self.collect(body);
+            }
+            StmtKind::Trigger(name, _) => {
+                self.triggered.entry(name.clone()).or_insert((s.line, self.file.clone()));
+            }
             StmtKind::Param(n, _) => {
                 self.names.insert(n.clone());
             }
@@ -558,6 +598,14 @@ impl Ctx {
                 self.check_expr(e, line);
                 self.check_block(b, &[]);
             }
+            StmtKind::OnTouch { a, b, names, body, .. } => {
+                self.check_expr(a, line);
+                self.check_expr(b, line);
+                let known: Vec<String> = names.iter().flat_map(|(x, y)| [x.clone(), y.clone()]).filter(|n| !n.is_empty()).collect();
+                self.check_block(body, &known);
+            }
+            StmtKind::OnEvent { var, body, .. } => self.check_block(body, &var.iter().cloned().collect::<Vec<_>>()),
+            StmtKind::Trigger(_, v) => v.iter().for_each(|e| self.check_expr(e, line)),
             StmtKind::Persist { body, steps, until } => {
                 self.check_block(body, &[]);
                 steps.iter().chain(until.iter()).for_each(|e| self.check_expr(e, line));
@@ -652,9 +700,9 @@ impl Ctx {
             }
             Expr::List(items) => items.iter().for_each(|x| self.check_expr(x, line)),
             Expr::Dict(items) => items.iter().for_each(|(_, x)| self.check_expr(x, line)),
-            Expr::Spawn { prefab, at, props } => {
+            Expr::Spawn { prefab, at, props, into } => {
                 self.check_expr(prefab, line);
-                if let Some(a) = at {
+                for a in at.iter().chain(into.iter()) {
                     self.check_expr(a, line);
                 }
                 props.iter().for_each(|(_, x)| self.check_expr(x, line));
@@ -683,6 +731,34 @@ impl Ctx {
             public.truncate(12);
             let help = (!public.is_empty()).then(|| format!("{} has: {}", m, public.join(", ")));
             self.report(line, format!("the module {} has no '{}'.{}", m, f, hint), Target::Name(f.to_string()), help, false);
+        }
+    }
+
+    /// `trigger "x"` with nothing listening (or `on event "x"` that nothing triggers) is usually a typo.
+    fn check_events(&mut self) {
+        let mut found = vec![];
+        for (from, to, what) in [(&self.triggered, &self.listened, "nothing listens for"), (&self.listened, &self.triggered, "nothing ever triggers")] {
+            let pool: Vec<String> = to.keys().cloned().collect();
+            for (name, (line, file)) in from {
+                if to.contains_key(name) {
+                    continue;
+                }
+                let close = suggest::closest(name, &pool);
+                let hint = close.as_ref().map(|c| format!(" Did you mean \"{}\"?", c)).unwrap_or_default();
+                let help = if what == "nothing listens for" {
+                    format!("add a block that reacts to it:   on event \"{}\"", name)
+                } else {
+                    format!("start it somewhere with:   trigger \"{}\"", name)
+                };
+                found.push((*line, file.clone(), format!("{} the event \"{}\".{}", what, name, hint), name.clone(), help));
+            }
+        }
+        found.sort();
+        for (line, file, msg, name, help) in found {
+            let mut d = EzaError::check(line, msg, true).in_file(&file);
+            d.label(Target::Expr(Expr::Str(name)), "", true);
+            d.help.push(help);
+            self.diags.push(d);
         }
     }
 

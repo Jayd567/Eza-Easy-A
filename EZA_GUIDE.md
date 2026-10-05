@@ -690,6 +690,7 @@ Adding and subtracting need two vectors of the same length.
 | `.cross(v)` | cross product (3D only) | `[1, 0, 0].cross([0, 1, 0])` | `[0, 0, 1]` |
 | `distance(a, b)` | distance between two points | `distance([0, 0, 0], [3, 4, 0])` | `5` |
 | `lerp(a, b, t)` | point `t` of the way from `a` to `b` | `lerp([0, 0, 0], [10, 20, 0], 0.5)` | `[5, 10, 0]` |
+| `.move_toward(target, step)` | at most `step` closer to `target`, never past it | `[0, 0].move_toward([10, 0], 3)` | `[3, 0]` |
 
 `lerp` also works on plain numbers (`lerp(0, 10, 0.25)` is `2.5`) and on colors.
 
@@ -1605,6 +1606,7 @@ else
 | `fetch(url)` | download from the web | | see [the web](#23-the-web-fetch) |
 | `database(path)` | records saved in a file | | see [databases](#24-saving-records-database) |
 | `raycast(from=, direction=, distance=)` | the first thing along a line | | see [2D](#touching-and-looking) |
+| `find_path(grid, start, goal)` | the way through a grid, around walls | `find_path(["..#", "..."], [0, 0], [2, 1])` | see [pathfinding](#finding-a-way-pathfinding) |
 
 Every value also has two universal methods:
 
@@ -1679,9 +1681,69 @@ on scene.ticks
 ```eza
 on keyboard.pressed("space")            # a key goes down
 on mouse.pressed("left")                # a mouse click
-on player.collides_with(coin)           # touching something
+on player touches coin                  # starts touching something (see below)
 on timer == 60                          # a value reaches something
 ```
+
+### Touching: `on ... touches`
+
+`on a touches b` runs **once each time two things start touching**, and `on a stops touching b` runs once each time they come apart:
+
+```eza
+on hero touches lava
+    change hero.health by -10
+
+on hero stops touching water
+    print("out of the water")
+```
+
+Either side can be one object, a list of objects, or a **prefab**, which means every live copy of it. Then `as` names the two things that touched, so the block knows which ones:
+
+```eza
+on Bullet touches Enemy as b, e
+    change e.hp by -b.damage
+    destroy b
+
+on hero touches Coin as h, coin
+    destroy coin
+    change score by 1
+```
+
+- Each pair counts on its own: two coins touched at once run the block twice, once per coin.
+- A pair that keeps touching doesn't run it again; it has to come apart and touch again.
+- An invisible sprite (`visible=false`) makes a good **trigger zone**: `on hero touches exit_zone`.
+- `a.collides_with(b)` is still there for checking right now, inside `if`.
+
+### Your own events: `trigger` and `on event`
+
+An **event** is a name you make up. `trigger` sends it, and every `on event` block with that name runs straight away:
+
+```eza
+on event "boss_dead"
+    play "fanfare.wav"
+    change door.visible to false
+
+on event "boss_dead"
+    print("Level complete!")
+
+# somewhere else, maybe deep inside a function:
+trigger "boss_dead"
+```
+
+This keeps code apart: whatever kills the boss doesn't need to know about doors, sounds or messages.
+
+`with` hands the blocks a value, and `as` names it:
+
+```eza
+on event "scored" as points
+    change score by points
+
+trigger "scored" with 10
+```
+
+- Several blocks can listen for the same event; they run in the order they were written.
+- An `on event` block with `wait` in it carries on in the background, like other `on` blocks.
+- [`eza check`](#eza-check-catch-mistakes-before-running) warns about an event that's triggered but nothing listens for (or the other way round), which is usually a spelling mistake: `trigger "boss_ded"`.
 
 ---
 
@@ -2115,20 +2177,43 @@ Sprites that share a picture are drawn together in one batch automatically, so h
 
 ### Sprite sheets and animation
 
-`frame_size=32,32` cuts the picture into frames (left to right, then top to bottom), and `frame` picks one:
+`frame_size=32,32` cuts the picture into frames (left to right, then top to bottom, counting from 0), and `frame` picks one:
 
 ```eza
 change hero.frame to 2
 ```
 
-To animate, use a function with [`wait`](#31-pausing-wait):
+To **animate**, give the sprite an `animation`: the frames to play, in order. It loops by itself:
 
 ```eza
-define walk_cycle
-    each f in [1, 2, 0]
-        change hero.frame to f
-        wait 6 steps
+sprite name="torch" texture=fire_sheet frame_size=16,16 animation=[0, 1, 2, 3] fps=12
 ```
+
+Most characters have several animations. Name them with `animations`, then pick one by name:
+
+```eza
+stage
+    sprite name="hero" texture=hero_sheet frame_size=32,32 animations={idle: [0], walk: [1, 2, 0], jump: [3]} animation="idle" fps=10
+
+on scene.ticks
+    if hero.velocity.x != 0
+        change hero.animation to "walk"
+    else
+        change hero.animation to "idle"
+```
+
+| Property | Default | Meaning |
+|---|---|---|
+| `animation` | none | the frames to play (`[1, 2, 3]`), or the name of one of the `animations` |
+| `animations` | none | named frame lists: `{walk: [1, 2], idle: [0]}` |
+| `fps` | `8` | animation frames per second |
+| `loop` | `true` | `false` plays it once and stops on the last frame |
+| `animation_done` | | becomes `true` when an animation with `loop=false` has finished |
+
+- Changing `animation` to a different one starts it from its first frame. Setting it to the one already playing does nothing, so setting it every frame (like above) is fine.
+- `change hero.animation to none` stops it, and `frame` stays where it was.
+- Spawned sprites can animate too: put `animation=...` in the prefab, or `spawn Coin animation=[0, 1, 2, 3]`.
+- A one-off animation: `change hero.loop to false` and `change hero.animation to "attack"`, then `on hero.animation_done` to go back to `"idle"`.
 
 ### Tilemaps
 
@@ -2188,6 +2273,52 @@ if hit and hit.object == hero
 ```
 
 A hit has `.object`, `.point` and `.distance`, and for tilemaps also `.tile` and `.cell`. With nothing in the way it's `none`. `raycast` works in 3D too, with 3-number vectors.
+
+To run code when things start (or stop) touching, use [`on hero touches slime`](#touching-on--touches).
+
+### Finding a way: pathfinding
+
+`path_to` on a tilemap works out how to walk from one point to another **around the solid tiles**. It gives a list of points (the middles of the tiles to walk through), or `none` if there's no way through:
+
+```eza
+route = walls.path_to(slime.position, hero.position)
+```
+
+To follow it, move toward the first point; when you get there, drop it and head for the next. `.move_toward(target, step)` moves a point at most `step` closer, without going past:
+
+```eza
+route = []
+timer = 0
+on scene.ticks
+    change timer by 1
+    if timer % 30 == 1                 # twice a second, look for the way again
+        found = walls.path_to(slime.position, hero.position)
+        if found != none
+            change route to found
+    if len(route) > 0
+        change slime.position to slime.position.move_toward(route[0], 1.5)
+        if distance(slime.position, route[0]) < 0.5
+            change route to route.remove(route[0])
+```
+
+- It only goes up, down, left and right. `walls.path_to(a, b, true)` also allows diagonal steps (it never cuts across the corner of a wall).
+- It's made for top-down games (`gravity=0`): it doesn't know about jumping or falling.
+- Things that walk the path should be a bit smaller than a tile, so they fit through gaps.
+
+For a grid that isn't a tilemap, like a board game or a dungeon you made in a list, use `find_path(grid, start, goal)`. The grid is a list of text rows where `#` is a wall (or a list of lists where `true` or `1` is a wall), and places are `[column, row]`:
+
+```eza
+dungeon = [
+    "..#.....",
+    "..#.##..",
+    "....#...",
+]
+print(find_path(dungeon, [0, 0], [7, 0]))     # [[1, 0], [1, 1], [1, 2], [2, 2], ...]
+```
+
+It gives the cells to step through after the start, ending at the goal, or `none` if the goal can't be reached. Add `true` at the end for diagonal steps.
+
+See [`examples/maze_chase.eza`](examples/maze_chase.eza) for a whole game: a slime that chases you through a maze.
 
 ### 2D vectors
 
@@ -2278,7 +2409,7 @@ b = spawn Bullet at 1,2,3
 b = spawn Bullet at player.position + [0, 1, 0] damage=9 dir=[0, 0, -1]
 ```
 
-- `at` sets the position: three numbers, or any vector.
+- `at` sets the position: three numbers (or two for a 2D sprite), or any vector.
 - `key=value` pairs after it set or add properties. Unlike in a scene, these **can** be expressions.
 - In the window, spawned objects appear immediately and show live changes.
 - Spawned objects can use `physics=true`, and `solid=true` makes them obstacles.
@@ -2300,7 +2431,36 @@ print(b.alive)         # false
 
 - `.alive` is `true` until a spawned object is destroyed.
 - Destroying something declared in the scene hides it instead: it gets `visible = false` and `destroyed = true`, and stops colliding and falling.
-- `destroy` takes one object. To destroy several, loop: `each e in enemies then destroy e`.
+- `destroy` takes one object, or a list of spawned objects: `destroy Bullet.all` removes every bullet.
+
+### Keeping track of copies: `.all`, `.count` and `into`
+
+Games often need "every enemy that's still alive". A prefab keeps track of its copies by itself:
+
+```eza
+print(Enemy.count)              # how many are alive right now
+each e in Enemy.all             # every live copy, oldest first
+    change e.position.x by 1
+destroy Bullet.all              # clear the screen
+```
+
+To keep your own list, spawn **into** it. Destroying a copy takes it out of the list again, so the list is always up to date:
+
+```eza
+coins = []
+spawn Coin at 10, 50 into coins
+spawn Coin at 90, 50 into coins
+print(len(coins))               # 2
+
+on hero touches Coin as h, coin
+    destroy coin                # coins loses it straight away
+    if len(coins) == 0
+        trigger "all_coins"
+```
+
+- The list has to exist first (`coins = []`).
+- One copy can be in several lists: spawn it into one, and `push` it to others by hand (but only the `into` list updates by itself).
+- `into` works with any list, like `level.enemies` or `teams[0]`.
 
 ### A full example: homing bullets
 
@@ -2681,14 +2841,31 @@ This reads your program (and every file it `include`s or `use`s) without running
 - **`=` used twice for the same name** in one block (use `change`)
 - **`go to` a script that isn't there**
 - **names a module doesn't have**: `the module enemies has no 'mkae'. Did you mean 'make'?`, and private `_names` used from outside
+- **the wrong kind of value**, worked out from how your program makes each name (you never write types):
+  - math that can't work: `score - "5"` (`score` is a number, `"5"` is text), `-name`, comparing text with a number using `<`
+  - a function a value doesn't have: `name.uper()` (did you mean `.upper`?), `names.upper()` on a list (it suggests `.map`)
+  - fields and functions your `data` types don't have: `goblin.nmae`, `Enemy(hp=5, speeed=2)`, `goblin.take_damage()` without its argument
+  - calling something that isn't a function (`score()`), `[ ]` on a number, `names["first"]` on a list, `each` over true/false
 - every **syntax error**
+
+```
+[Check Error] game.eza:14: goblin is an Enemy, which has no field or function 'nmae'. Did you mean 'name'?  (E007)
+ 13 | goblin = Enemy(name="Goblin")
+ 14 | print(goblin.nmae)
+    |       ^^^^^^^^^^^
+   goblin is an Enemy - it's made on line 13
+   help: Enemy has fields: name, hp; functions: take_damage
+```
+
+It only reports what's **sure** to fail. If a name can hold different kinds of values (a number here, text there), or comes from a file or the web, `eza check` doesn't guess, so it never complains about code that works.
 
 It also **warns** about things that are probably mistakes, but won't stop the program:
 
 - **code that can never run**, because it comes right after a `return`, `break` or `continue`
 - **a variable a function creates but never uses** (start the name with `_`, like `_unused`, if that's on purpose)
+- **an event nobody listens for**, or an `on event` nothing ever triggers (usually a spelling mistake)
 
-It prints `OK` (or `OK (2 warning(s))`) when it finds no errors. In VS Code it runs every time you save, and underlines the exact spot: red for errors, yellow for warnings.
+It prints `OK` (or `OK (2 warning(s))`) when it finds no errors. In VS Code it runs **while you type** (a moment after you stop), and underlines the exact spot: red for errors, yellow for warnings.
 
 ### Stack traces
 
@@ -2821,6 +2998,8 @@ param gravity = -9.8
 tick / tick 10
 on condition                  # fires when it becomes true
 on scene.ticks                # every frame
+on hero touches Coin as h, c  # once per pair when they start touching (also: stops touching)
+on event "won" / trigger "won" with 10
 wait 30 steps / wait 1 second
 persist ... for 60 steps / until cond / until cond or 60 steps
 tween x.position to [0, 0, 0] over 60 steps ease ease_out
@@ -2836,6 +3015,7 @@ scene name="world"
 prefab Coin
     sphere width=0.5 color=#FFD700
 c = spawn Coin at 1,1,1 value=10
+spawn Coin at 5,1,0 into coins       Coin.all   Coin.count   destroy Coin.all
 destroy c
 player.collides_with(c)
 keyboard.pressed("space")    mouse.held("left")
@@ -2857,7 +3037,10 @@ flags & 0b100   1 << 4   0xFF.to_binary
 stage gravity=-980
     tilemap tiles="tiles.png" layout="level.txt" tile_size=32
     sprite name="hero" texture="hero.png" position=0,0 origin=bottom_center physics=true
+    sprite name="bat" texture=bat_sheet frame_size=16,16 animations={fly: [0, 1, 2]} animation="fly" fps=10
 change stage.camera.position to hero.position
+route = level.path_to(slime.position, hero.position)    pos.move_toward(route[0], 2)
+find_path(["..#", "..."], [0, 0], [2, 1])
 hit = raycast(from=a.position, direction=[1, 0], distance=200)
 
 # ---- particles and sound
@@ -2946,6 +3129,15 @@ The message itself usually says what to do (see [reading an error message](#read
 | `a module's variables can only be changed by its own code` | `change module.x to ...` from another file | add a function to the module that changes it |
 | `"x.eza" is already being loaded - two modules can't use each other` | a.eza uses b.eza, and b.eza uses a.eza | move what they share into a third file |
 | `can't use "x.eza"` / `can't find the module file` | the module file isn't there | check the path; it's relative to the file with the `use` line |
+| `can't subtract text from a number` (and add, multiply, divide) | the two sides are different kinds of values | turn text into a number with `num(...)`; `eza check` finds these before running |
+| `name is text, which has no method '.uper'` | that kind of value doesn't have that function | check the spelling; the help line suggests the closest one |
+| `goblin is an Enemy, which has no field or function 'nmae'` | the `data` type doesn't have that name | check the spelling; the help line lists what it has |
+| `score is a number, not a function` | `( )` after something that isn't a function | remove the `( )` |
+| `touches needs an object, a list of objects or a prefab` | `on x touches y` where one side is a number, text ... | use the objects themselves (or a prefab, for every copy) |
+| `a prefab only has .all (its live copies) and .count` | reading a property of the prefab itself, like `Coin.value` | spawn a copy first (`c = spawn Coin`) and use `c.value` |
+| `'coins' doesn't exist yet - make an empty list first` | `spawn ... into coins` before `coins = []` | create the list first |
+| `sprite has no animation called "wlak"` | `animation` names one that isn't in `animations` | check the spelling; the message lists the names it has |
+| `nothing listens for the event "x"` (a warning) | `trigger "x"`, but there's no `on event "x"` | check the spelling of both |
 | `can't start "..."` | `run` couldn't find the program | check it's installed and spelled right |
 | `there's no file "..." to delete` | a path is wrong | check it with `exists()` first |
 | `"..." is a folder - use delete_folder for folders` | `delete_file` on a folder | use `delete_folder` |

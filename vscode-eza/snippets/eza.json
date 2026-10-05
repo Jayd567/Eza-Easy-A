@@ -335,5 +335,59 @@
       "\texpect ${2:double(4)} == ${3:8}"
     ],
     "description": "a test block (run with eza test)"
+  },
+  "on touches": {
+    "prefix": "ontouch",
+    "body": [
+      "on ${1:hero} touches ${2:Coin} as ${3:h}, ${4:coin}",
+      "\t${5:destroy $4}"
+    ],
+    "description": "run once when two things start touching (a prefab means every copy)"
+  },
+  "on event": {
+    "prefix": "event",
+    "body": [
+      "on event \"${1:boss_dead}\"",
+      "\t$0"
+    ],
+    "description": "run when something does trigger \"...\""
+  },
+  "trigger": {
+    "prefix": "trigger",
+    "body": [
+      "trigger \"${1:boss_dead}\""
+    ],
+    "description": "run every on event \"...\" block"
+  },
+  "sprite animations": {
+    "prefix": "animations",
+    "body": [
+      "animations={idle: [0], walk: [1, 2, 0]} animation=\"idle\" fps=${1:10}"
+    ],
+    "description": "named frame lists for a sprite"
+  },
+  "chase with pathfinding": {
+    "prefix": "chase",
+    "body": [
+      "route = []",
+      "on scene.ticks",
+      "\tif len(route) == 0",
+      "\t\tfound = ${1:walls}.path_to(${2:slime}.position, ${3:hero}.position)",
+      "\t\tif found != none",
+      "\t\t\tchange route to found",
+      "\telse",
+      "\t\tchange $2.position to $2.position.move_toward(route[0], ${4:2})",
+      "\t\tif distance($2.position, route[0]) < 0.5",
+      "\t\t\tchange route to route.remove(route[0])"
+    ],
+    "description": "follow a path around the walls of a tilemap"
+  },
+  "spawn into": {
+    "prefix": "spawninto",
+    "body": [
+      "${1:coins} = []",
+      "spawn ${2:Coin} at ${3:0}, ${4:0} into $1"
+    ],
+    "description": "spawn a copy and keep it in a list (destroy takes it out)"
   }
 }
