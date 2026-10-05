@@ -25,6 +25,10 @@ if exist "%USERPROFILE%\.vscode" (
     if exist "%USERPROFILE%\.vscode\extensions\eza.eza-lang-0.1.0" rmdir /s /q "%USERPROFILE%\.vscode\extensions\eza.eza-lang-0.1.0"
     xcopy /e /i /y /q "vscode-eza" "%USERPROFILE%\.vscode\extensions\eza.eza-lang-0.1.0" >nul
     echo Installed the VS Code extension - restart VS Code to use it.
+    rem teach VS Code's AI chat what Eza looks like, so it doesn't write Python into .eza files
+    if not exist "%APPDATA%\Code\User\prompts" mkdir "%APPDATA%\Code\User\prompts"
+    copy /y "vscode-eza\ai\eza.instructions.md" "%APPDATA%\Code\User\prompts\eza.instructions.md" >nul
+    echo Taught VS Code's AI chat how Eza is written.
 ) else (
     echo VS Code wasn't found, so the extension was skipped. Run this again after installing VS Code.
 )

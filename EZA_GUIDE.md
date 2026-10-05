@@ -72,8 +72,7 @@ Eza scripts are plain text files ending in `.eza`. Run them from a terminal:
 | `eza --version` | Shows the version (`-v` also works) |
 | `eza help` | Shows the list of commands (`--help` and `-h` also work) |
 
-> **The window needs the engine build.** Install it once from the Eza project folder with
-> `cargo install --path . --features engine`. Without it, scripts still run in the terminal.
+> The download from GitHub already includes everything, windows too. Only if you build Eza yourself from the source: use `cargo build --release --features engine`, or windows won't open.
 
 ### The interactive prompt
 
@@ -86,6 +85,14 @@ eza> if score > 5
 ...
 big score
 ```
+
+### VS Code
+
+The installer adds Eza to VS Code: colors, hover help, snippets, a Run command, and red or yellow underlines under mistakes while you type.
+
+It also teaches **VS Code's AI chat** (Copilot) what Eza looks like, so it stops writing Python into `.eza` files. That's a short reference file, `eza.instructions.md`, which VS Code hands to the AI whenever a `.eza` file is involved. It's in your VS Code settings folder (`%APPDATA%\Code\User\prompts`), so it works in every folder you open. To share it with everyone working on a project, copy it into the project as `.github/instructions/eza.instructions.md`.
+
+This helps the **chat** and agent. The grey suggestions that pop up while you type (inline completions) can't read instruction files, so they may still guess wrong. They improve when an `.eza` file or this guide is open in another tab. If they get in the way, turn them off for Eza only: click the Copilot icon in the status bar while a `.eza` file is open and choose to disable completions for `eza`.
 
 ---
 
