@@ -1,6 +1,6 @@
 # Grab every coin before the slime catches you.  Run with:  eza examples/maze_chase.eza
 # Arrows or WASD move.
-# Shows: sprite animations, pathfinding (path_to), `on ... touches`, `spawn ... into`, and events.
+# Shows: sprite animations, pathfinding (find_path), `on ... touches`, `spawn ... into`, and events.
 
 hero_sheet = load "assets/hero_sheet.png"
 
@@ -10,8 +10,9 @@ stage name="maze" gravity=0
     sprite name="hero" texture=hero_sheet frame_size=32,32 width=24 height=24 position=-272,192 physics=true animations={idle: [0], walk: [1, 2, 0]} animation="idle" fps=10
     sprite name="slime" texture="assets/slime.png" width=24 height=24 position=272,-192
 
+status = "Coins left: 5"
 gui window "hud" x=16 y=16 width=400 background=#00000088 rounded=8 padding=10
-    text "Coins left: 5" font_size=22
+    text "{status}" font_size=22
 
 prefab Coin
     sprite width=12 height=12 color=#FFD54F
@@ -27,7 +28,7 @@ playing = true
 route = []
 timer = 0
 
-on scene.ticks
+on every frame
     if not playing
         change hero.velocity to [0, 0]
         return
@@ -53,17 +54,17 @@ on scene.ticks
     # the slime works out the way to the hero twice a second, then follows it point by point
     change timer by 1
     if timer % 30 == 1
-        found = walls.path_to(slime.position, hero.position)
+        found = walls.find_path(slime.position, hero.position)
         if found != none
             change route to found
     if len(route) > 0
         change slime.position to slime.position.move_toward(route[0], 1.6)
         if distance(slime.position, route[0]) < 0.5
-            change route to route.remove(route[0])
+            route.remove(route[0])
 
 on hero touches Coin as h, coin
     destroy coin
-    change hud.children[0].label to "Coins left: {len(coins)}"
+    change status to "Coins left: {len(coins)}"
     if len(coins) == 0
         trigger "won"
 
@@ -73,10 +74,10 @@ on hero touches slime
 
 on event "won"
     change playing to false
-    change hud.children[0].label to "You got them all!"
+    change status to "You got them all!"
     change slime.color to #80D8FF
 
 on event "caught"
     change playing to false
-    change hud.children[0].label to "Caught! Coins left: {len(coins)}"
+    change status to "Caught! Coins left: {len(coins)}"
     change hero.color to #FF8A80

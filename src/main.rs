@@ -28,11 +28,11 @@ const USAGE: &str = "Eza language
 
 usage:
   eza                 start the interactive prompt
-  eza <file.eza>      run a script (opens a 3D window if it has a `scene`)
-  eza play <file.eza> same as `eza <file.eza>`
-  eza run <file.eza>  run a script without ever opening a window
+  eza <file.eza>      run a script (opens a window if it has a `scene`, `stage` or `gui`)
                       (words after the file name reach the script as `args`)
-  eza check <file>    find mistakes (typos, wrong kinds of values, wrong argument counts, ...) without running
+  eza run <file.eza>  run a script in the terminal only, never opening a window
+  eza check [path]    find mistakes (typos, wrong kinds of values, wrong argument counts, ...)
+                      without running, in a file or every .eza file in this folder
   eza test [path]     run the `test` blocks in a file or every .eza file in a folder
   eza build <file>    make dist/<name>/ with <name>.exe, to share without installing Eza
   eza explain E003    explain an error code in detail (`eza explain` lists them)
@@ -197,11 +197,9 @@ fn run(args: Vec<String>) -> i32 {
             let plain = args.iter().any(|a| a == "--plain");
             let stdin = args.iter().any(|a| a == "--stdin");
             match args.iter().skip(1).find(|a| !a.starts_with("--")) {
-                Some(f) => check(f, plain, stdin),
-                None => {
-                    eprintln!("{}", USAGE);
-                    2
-                }
+                Some(f) if !Path::new(f).is_dir() => check(f, plain, stdin),
+                // a folder (or nothing: this folder): every .eza file in it, like `eza test`
+                f => check_folder(f.map_or(".", |s| s.as_str()), plain),
             }
         }
         Some("explain") => diagnose::explain(args.get(1).map(|s| s.as_str())),
@@ -295,6 +293,26 @@ fn read(path: &str) -> Option<String> {
             None
         }
     }
+}
+
+/// `eza check` on a folder: every .eza file in it.
+fn check_folder(dir: &str, plain: bool) -> i32 {
+    let mut files = vec![];
+    eza_files(Path::new(dir), &mut files);
+    if files.is_empty() {
+        eprintln!("there are no .eza files in {}", dir);
+        return 2;
+    }
+    let mut worst = 0;
+    for f in files {
+        let shown = f.display().to_string();
+        let shown = shown.strip_prefix(".\\").or(shown.strip_prefix("./")).unwrap_or(&shown).to_string();
+        if !plain {
+            println!("== {}", shown);
+        }
+        worst = worst.max(check(&shown, plain, false));
+    }
+    worst
 }
 
 fn check(path: &str, plain: bool, stdin: bool) -> i32 {

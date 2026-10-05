@@ -78,6 +78,8 @@ pub fn list_method(it: &mut Interp, l: &[Value], name: &str, args: &[Value]) -> 
             }
             Value::None
         }
+        // nums.count = how many items; nums.count(3) / nums.count(n -> n > 3) = how many match
+        "count" if args.is_empty() => Value::Num(l.len() as f64),
         "count" => {
             let how = arg(it, args, 0, name)?.clone();
             let mut n = 0;

@@ -22,11 +22,11 @@ data Box
 
 crate = Box()
 tween crate.position.x to 10 over 4 steps ease linear
-print("animating:", crate.animating)
+print("tweening:", crate.tweening)
 each f in 4 then
     tick
     print("frame {f + 1}: x = {crate.position.x}")
-print("animating:", crate.is_tweening)
+print("tweening:", crate.tweening)
 
 # interruption handshake: a new tween starts from wherever the object is right now
 tween crate.position.x to 0 over 10 steps
@@ -41,7 +41,7 @@ tick 5
 print("color half way:", crate.color)
 change crate.color to #00FF00
 tick 5
-print("color after change:", crate.color, crate.animating)
+print("color after change:", crate.color, crate.tweening)
 
 rewind crate by 3 steps
 print("rewound:", crate.color, crate.position.x)

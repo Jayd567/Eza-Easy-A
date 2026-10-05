@@ -437,6 +437,10 @@ impl Ctx {
 
     fn collect_decl(&mut self, n: &DeclNode) {
         self.names.insert(n.kind.clone());
+        // sprite "hero" makes a name too
+        if let Some(Expr::Str(l)) = &n.label {
+            self.names.insert(l.replace(|c: char| !c.is_alphanumeric(), "_"));
+        }
         for (k, e) in &n.props {
             if k == "name" {
                 if let Expr::Str(s) = e {

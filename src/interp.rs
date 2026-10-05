@@ -573,6 +573,8 @@ pub struct Interp {
     handlers: Vec<Handler>,
     touch_handlers: Vec<TouchHandler>,
     event_handlers: Vec<EventHandler>,
+    /// GUI labels with {values} in them, kept up to date every frame: (window variable, element path, the label, its scope)
+    live_labels: Vec<(String, Vec<usize>, Expr, Rc<Scope>)>,
     /// sprite animations: the variable's address -> (the animation it is playing, the frame it started on)
     anims: HashMap<usize, (String, u64)>,
     current_on: Option<(Expr, Rc<Scope>)>,
@@ -654,6 +656,7 @@ impl Interp {
             touch_handlers: vec![],
             event_handlers: vec![],
             anims: HashMap::new(),
+            live_labels: vec![],
             current_on: None,
             shadows: vec![],
             mimic_queue: vec![],
@@ -1083,6 +1086,13 @@ impl Interp {
                 }
                 self.bind_inputs(&v);
                 self.bind_global(&name, v);
+                // text "Coins: {coins}" keeps showing the current value
+                self.live_labels.retain(|(root, _, _, _)| *root != name);
+                let mut live = vec![];
+                live_label_paths(node, vec![], &mut live);
+                for (path, e) in live {
+                    self.live_labels.push((name.clone(), path, e, scope.clone()));
+                }
                 // `on button.hover ...` inside an element: point `button` (or `self`) at that element
                 for (path, kind, stmts) in events {
                     let mut target = Expr::Ident(name.clone());
@@ -2220,10 +2230,10 @@ impl Interp {
         }
     }
 
-    /// Flips `.animating` on an object in place (not a new history step).
+    /// Flips `.tweening` on an object in place (not a new history step).
     fn set_animating(&self, var: &VarRef, on: bool) {
         if let Value::Obj(o) = var.borrow_mut().get_mut() {
-            Rc::make_mut(o).set("animating", Value::Bool(on));
+            Rc::make_mut(o).set("tweening", Value::Bool(on));
         }
     }
 
@@ -2606,6 +2616,53 @@ impl Interp {
         self.tasks = keep;
         crate::physics::step(self)?;
         crate::physics::step2d(self)?;
+        self.refresh_labels()?;
+        Ok(())
+    }
+
+    /// GUI labels written with {values} show the values as they are now.
+    fn refresh_labels(&mut self) -> R<()> {
+        let mut i = 0;
+        while i < self.live_labels.len() {
+            let (root, path, e, sc) = self.live_labels[i].clone();
+            let Some(var) = self.globals.lookup(&root) else {
+                i += 1;
+                continue;
+            };
+            let text = match self.eval(&e, &sc) {
+                Ok(v) => Value::Str(v.display()),
+                Err(err) => {
+                    // stop updating this label, and say why
+                    self.live_labels.remove(i);
+                    let mut err = err;
+                    err.context.push(format!("while updating the text \"{}\" in {}", crate::diagnose::code(&e), root));
+                    if !self.frame_mode {
+                        return Err(err);
+                    }
+                    self.errors.push(err);
+                    continue;
+                }
+            };
+            let mut p = vec![];
+            for k in &path {
+                p.push(PathEl::Field("children".into()));
+                p.push(PathEl::Index(Value::Num(*k as f64)));
+            }
+            p.push(PathEl::Field("label".into()));
+            let current = var.borrow().get().clone();
+            match get_path(&current, &p, self.line) {
+                Ok(old) if equals(&old, &text) => {}
+                Ok(_) => {
+                    let nr = set_path(current, &p, text, self.line)?;
+                    self.commit(&var, nr);
+                }
+                Err(_) => {
+                    self.live_labels.remove(i);
+                    continue;
+                }
+            }
+            i += 1;
+        }
         Ok(())
     }
 
@@ -2862,6 +2919,12 @@ impl Interp {
         for (k, e) in &n.props {
             let v = self.eval(e, scope)?;
             o.set(k, v);
+        }
+        // sprite "hero" ... is the same as sprite name="hero" (like gui window "hud")
+        if o.get("name").is_none() && kind != "scene" && kind != "stage" {
+            if let Some(Value::Str(l)) = o.get("label").cloned() {
+                o.set("name", Value::Str(l.replace(|c: char| !c.is_alphanumeric(), "_")));
+            }
         }
         if SPRITE_KINDS.contains(&kind) {
             self.finish_sprite(&mut o, scope)?;
@@ -3259,7 +3322,17 @@ impl Interp {
                 let f = self.module_get(m, name)?;
                 return self.call_value(f, vals, named, aliases);
             }
-            return methods::call(self, o, name, vals, true);
+            // list.add(x) / list.remove(x) / dict.remove(key) change the list or dictionary they're called on
+            let changes_it = match (&o, name.as_str()) {
+                (Value::List(_), "add" | "remove") => true,
+                (Value::Obj(ob), "remove") => ob.type_name == "dict",
+                _ => false,
+            };
+            let r = methods::call(self, o, name, vals, true)?;
+            if changes_it && root_name_of(obj).is_some() {
+                self.store_back(obj, scope, r.clone())?;
+            }
+            return Ok(r);
         }
         let f = self.eval(callee, scope)?;
         self.call_value(f, vals, named, aliases)
@@ -3533,5 +3606,19 @@ mod tests {
         it.tick().unwrap();
         assert_eq!(num(&it, "a"), 41.0);
         assert!(it.debug_watch(10).iter().any(|l| l.starts_with("* a = 41")));
+    }
+}
+
+/// GUI elements whose label has {values} in it: (path of child indexes, the label).
+fn live_label_paths(n: &DeclNode, path: Vec<usize>, out: &mut Vec<(Vec<usize>, Expr)>) {
+    if let Some(l) = &n.label {
+        if !matches!(l, Expr::Str(_)) {
+            out.push((path.clone(), l.clone()));
+        }
+    }
+    for (i, c) in n.children.iter().enumerate() {
+        let mut p = path.clone();
+        p.push(i);
+        live_label_paths(c, p, out);
     }
 }

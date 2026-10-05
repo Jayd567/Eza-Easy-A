@@ -848,9 +848,9 @@ fn method_result(t: &Ty, m: &str) -> Ty {
     match (t, m) {
         (Ty::Str, "upper" | "lower" | "trim" | "trimleft" | "trimright" | "capitalize" | "replace" | "reverse" | "repeat" | "pad_left" | "pad_right") => Ty::Str,
         (Ty::Str, "split" | "lines" | "words" | "find_all") => Ty::List,
-        (Ty::Str, "length") | (Ty::List, "length" | "sum") => Ty::Num,
+        (Ty::Str, "length") | (Ty::List, "length" | "sum" | "count") => Ty::Num,
         (Ty::Str, "contains" | "starts_with" | "ends_with" | "matches") => Ty::Bool,
-        (Ty::List, "filter" | "map" | "sort" | "sortBy" | "reverse" | "unique" | "add" | "remove" | "normalize" | "move_toward") => Ty::List,
+        (Ty::List, "filter" | "map" | "sort" | "sortBy" | "sort_by" | "reverse" | "unique" | "add" | "remove" | "normalize" | "move_toward") => Ty::List,
         (Ty::List, "join") => Ty::Str,
         (Ty::List, "contains" | "any" | "all") => Ty::Bool,
         (Ty::Num, "abs" | "floor" | "ceil" | "round" | "sqrt" | "pow" | "clamp" | "min" | "max") => Ty::Num,

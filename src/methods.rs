@@ -125,6 +125,11 @@ pub fn builtin(it: &mut Interp, name: &str, args: Vec<Value>, named: Vec<(String
             o.set("items", Value::list(items));
             Value::obj(o)
         }
+        // find_path(walls, from, to): a tilemap works too, the same as walls.find_path(from, to)
+        "find_path" if matches!(args.first(), Some(Value::Obj(o)) if o.type_name == "tilemap") => {
+            let map = args[0].clone();
+            return call(it, map, "find_path", args[1..].to_vec(), true);
+        }
         "find_path" => {
             // find_path(grid, [col, row], [col, row], diagonal): walls are "#" in text rows, or true / 1 in lists
             let grid: Vec<Vec<bool>> = match arg(it, &args, 0, name)? {
@@ -321,7 +326,8 @@ pub fn call(it: &mut Interp, recv: Value, name: &str, args: Vec<Value>, called: 
                 };
                 Ok(Some(Value::list(vec![Value::Num(out[0]), Value::Num(out[1])])))
             }
-            "path_to" if o.type_name == "tilemap" => {
+            // walls.find_path(from, to) (the older name path_to still works)
+            "find_path" | "path_to" if o.type_name == "tilemap" => {
                 // level.path_to(from, to [, diagonal]): world points to walk through, around solid tiles
                 let (a, b) = (vec_arg(it, &args, 0, name)?, vec_arg(it, &args, 1, name)?);
                 if a.len() != 2 || b.len() != 2 {
@@ -361,7 +367,8 @@ pub fn call(it: &mut Interp, recv: Value, name: &str, args: Vec<Value>, called: 
                 }
                 Ok(Some(Value::Num(crate::two_d::tile_at(o, [p[0], p[1]]) as f64)))
             }
-            "animating" | "is_tweening" => Ok(Some(o.get("animating").cloned().unwrap_or(Value::Bool(false)))),
+            // .tweening (the older names .animating and .is_tweening still work)
+            "tweening" | "animating" | "is_tweening" => Ok(Some(o.get("tweening").cloned().unwrap_or(Value::Bool(false)))),
             "pressed" | "held" | "released" if o.type_name == "Mouse" => {
                 let k = format!("mouse:{}", arg_str(it, &args, 0, name)?.to_lowercase());
                 let set = match name {
@@ -372,7 +379,8 @@ pub fn call(it: &mut Interp, recv: Value, name: &str, args: Vec<Value>, called: 
                 Ok(Some(Value::Bool(set.contains(&k))))
             }
             "hover" | "pressed" => Ok(Some(o.get(name).cloned().unwrap_or(Value::Bool(false)))),
-            "collides_with" => {
+            // a.touches(b) (the older name collides_with still works)
+            "touches" | "collides_with" => {
                 let target = arg(it, &args, 0, name)?.clone();
                 Ok(Some(Value::Bool(collides(it, o, &target)?)))
             }
@@ -423,8 +431,8 @@ fn string_method(it: &Interp, s: &str, name: &str, args: &[Value]) -> R<Option<V
         "lower" => st(s.to_lowercase()).some(),
         "length" => Value::Num(s.chars().count() as f64).some(),
         "trim" => st(s.trim().into()).some(),
-        "trimleft" => st(s.trim_start().into()).some(),
-        "trimright" => st(s.trim_end().into()).some(),
+        "trim_left" | "trimleft" => st(s.trim_start().into()).some(),
+        "trim_right" | "trimright" => st(s.trim_end().into()).some(),
         "reverse" => st(s.chars().rev().collect()).some(),
         "capitalize" => {
             let mut c = s.chars();
@@ -545,7 +553,7 @@ fn list_method(it: &mut Interp, l: &[Value], name: &str, args: &[Value]) -> R<Op
             sort_list(it, &mut pairs)?;
             Value::list(pairs.into_iter().map(|p| p.1).collect()).some()
         }
-        "sortBy" => {
+        "sort_by" | "sortBy" => {
             let f = arg(it, args, 0, name)?.clone();
             let mut pairs = vec![];
             for v in l {

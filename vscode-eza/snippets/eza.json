@@ -370,15 +370,15 @@
     "prefix": "chase",
     "body": [
       "route = []",
-      "on scene.ticks",
+      "on every frame",
       "\tif len(route) == 0",
-      "\t\tfound = ${1:walls}.path_to(${2:slime}.position, ${3:hero}.position)",
+      "\t\tfound = ${1:walls}.find_path(${2:slime}.position, ${3:hero}.position)",
       "\t\tif found != none",
       "\t\t\tchange route to found",
       "\telse",
       "\t\tchange $2.position to $2.position.move_toward(route[0], ${4:2})",
       "\t\tif distance($2.position, route[0]) < 0.5",
-      "\t\t\tchange route to route.remove(route[0])"
+      "\t\t\troute.remove(route[0])"
     ],
     "description": "follow a path around the walls of a tilemap"
   },

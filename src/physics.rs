@@ -62,8 +62,17 @@ pub fn step(it: &mut Interp) -> R<()> {
     for v in it.solid_values() {
         collect_solids(&v, &mut solids);
     }
-    let gravity = match it.global("gravity") {
-        Some(Value::Num(g)) => g,
+    // `scene gravity=-20` (like `stage gravity=`), or the older `param gravity = -20`
+    let from_scene = match it.global("scene") {
+        Some(Value::Obj(s)) => match s.get("gravity") {
+            Some(Value::Num(g)) => Some(*g),
+            _ => None,
+        },
+        _ => None,
+    };
+    let gravity = match (from_scene, it.global("gravity")) {
+        (Some(g), _) => g,
+        (None, Some(Value::Num(g))) => g,
         _ => DEFAULT_GRAVITY,
     };
     for var in bodies {

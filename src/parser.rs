@@ -80,6 +80,11 @@ fn check_purity(body: &[Stmt], shadow: &str, locals: &mut Vec<String>) -> R<()> 
     Ok(())
 }
 
+/// `2 seconds` as frames (60 a second).
+fn to_frames(e: Expr) -> Expr {
+    Expr::Binary(Op::Mul, Box::new(e), Box::new(Expr::Num(60.0)))
+}
+
 /// "score: {score}" becomes "score: " + score. Use {{ and }} for literal braces.
 fn interpolate(s: String, line: usize) -> R<Expr> {
     if !s.contains('{') && !s.contains('}') {
@@ -351,8 +356,15 @@ impl Parser {
             "define" => {
                 self.next();
                 let name = self.ident()?;
-                self.eat_sym(",");
-                let params = self.params()?;
+                // define heal, target, amount   or   define heal(target, amount)
+                let params = if self.eat_sym("(") {
+                    let p = self.params()?;
+                    self.expect_sym(")")?;
+                    p
+                } else {
+                    self.eat_sym(",");
+                    self.params()?
+                };
                 let body = Rc::new(self.block()?);
                 StmtKind::Define(Rc::new(FuncDef::new(name, params, body).at(line)))
             }
@@ -391,6 +403,7 @@ impl Parser {
                 self.next();
                 let body = self.block()?;
                 self.expect_kw("handle")?;
+                self.eat_kw("as");
                 let name = match self.peek() {
                     Tok::Ident(s) if s != "then" => self.ident()?,
                     _ => "error".to_string(),
@@ -405,6 +418,13 @@ impl Parser {
                     let Tok::Str(name) = self.next() else { unreachable!() };
                     let var = if self.eat_kw("as") { Some(self.ident()?) } else { None };
                     return Ok(Stmt { line, kind: StmtKind::OnEvent { name, var, body: Rc::new(self.block()?) } });
+                }
+                // on every frame  (the same as  on scene.ticks)
+                if self.is_kw("every") && matches!(self.peek_n(1), Tok::Ident(w) if w == "frame") {
+                    self.next();
+                    self.next();
+                    let every = Expr::Field(Box::new(Expr::Ident("scene".into())), "ticks".into());
+                    return Ok(Stmt { line, kind: StmtKind::On(every, Rc::new(self.block()?)) });
                 }
                 let e = self.expr()?;
                 // on hero touches coin / on Bullet stops touching Enemy as b, e
@@ -425,6 +445,15 @@ impl Parser {
                     return Ok(Stmt { line, kind: StmtKind::OnTouch { a: e, b, names, start, body: Rc::new(self.block()?) } });
                 }
                 StmtKind::On(e, Rc::new(self.block()?))
+            }
+            // print "hi", score   (brackets are optional: print("hi") works too)
+            "print" if !self.peek1_sym("(") && !self.peek1_sym("=") && !self.peek1_sym(".") && !matches!(self.peek_n(1), Tok::Newline | Tok::Eof | Tok::Dedent) => {
+                self.next();
+                let mut args = vec![Arg { name: None, value: self.expr()? }];
+                while self.eat_sym(",") {
+                    args.push(Arg { name: None, value: self.expr()? });
+                }
+                StmtKind::Expr(Expr::Call(Box::new(Expr::Ident("print".into())), args))
             }
             "trigger" if matches!(self.peek_n(1), Tok::Str(_)) => {
                 self.next();
@@ -537,6 +566,11 @@ impl Parser {
             }
         };
         Ok(Stmt { line, kind })
+    }
+
+    /// `seconds` / `second` after a time.
+    fn eat_seconds(&mut self) -> bool {
+        self.eat_kw("seconds") || self.eat_kw("second")
     }
 
     fn eat_dedent(&mut self) {
@@ -732,8 +766,10 @@ impl Parser {
                 self.expect_kw("to")?;
                 let value = self.expr()?;
                 self.expect_kw("over")?;
-                let steps = self.expr()?;
-                if !self.eat_kw("steps") {
+                let mut steps = self.expr()?;
+                if self.eat_seconds() {
+                    steps = to_frames(steps);
+                } else if !self.eat_kw("steps") {
                     self.eat_kw("step");
                 }
                 let ease = if self.eat_kw("ease") { self.ident()? } else { "ease_in_out".to_string() };
@@ -770,12 +806,22 @@ impl Parser {
         let (mut steps, mut until) = (None, None);
         if self.eat_kw("for") {
             steps = Some(self.expr()?);
-            if !self.eat_kw("steps") {
+            if self.eat_seconds() {
+                steps = steps.map(to_frames);
+            } else if !self.eat_kw("steps") {
                 self.eat_kw("step");
             }
         } else if self.eat_kw("until") {
-            let e = self.expr()?;
-            if self.is_kw("steps") || self.is_kw("step") {
+            let mut e = self.expr()?;
+            let seconds = self.is_kw("seconds") || self.is_kw("second");
+            if seconds {
+                // `until cond or 2 seconds`: only the time part is in seconds
+                e = match e {
+                    Expr::Binary(Op::Or, l, r) => Expr::Binary(Op::Or, l, Box::new(to_frames(*r))),
+                    other => to_frames(other),
+                };
+            }
+            if seconds || self.is_kw("steps") || self.is_kw("step") {
                 self.next();
                 // `until cond or 120 steps`
                 match e {
@@ -903,8 +949,8 @@ impl Parser {
     }
 
     fn prop_atom(&mut self) -> R<Expr> {
-        // animations={walk: [1, 2], idle: [0]}
-        if self.is_sym("{") {
+        // animations={walk: [1, 2], idle: [0]}, and width=(size * 2): any value from the code, in brackets
+        if self.is_sym("{") || self.is_sym("(") {
             return self.primary();
         }
         Ok(match self.next() {

@@ -47,6 +47,9 @@ fn color_end(c: &[char], i: usize) -> Option<usize> {
     }
 }
 
+/// Words after which a value comes next, so a `#` there is a color, not a comment.
+const VALUE_WORDS: &[&str] = &["to", "by", "in", "at", "and", "or", "not", "then", "else", "with", "return", "if", "while", "until", "push", "expect", "print", "from", "into"];
+
 pub fn lex(src: &str) -> R<Vec<Token>> {
     // Windows editors (Notepad, PowerShell) may save a UTF-8 byte-order mark at the start
     let src = src.strip_prefix('\u{feff}').unwrap_or(src);
@@ -82,7 +85,8 @@ pub fn lex(src: &str) -> R<Vec<Token>> {
                 line_start = i;
                 continue;
             }
-            if c[i] == '#' && color_end(&c, i).is_none() {
+            // a line starting with # is always a comment (a color on its own line would do nothing)
+            if c[i] == '#' {
                 while i < n && c[i] != '\n' {
                     i += 1;
                 }
@@ -118,7 +122,15 @@ pub fn lex(src: &str) -> R<Vec<Token>> {
             }
             ' ' | '\t' | '\r' => i += 1,
             '#' => {
-                if let Some(j) = color_end(&c, i) {
+                // `#FF0000` is a color only where a value can go (after `=`, `to`, `(` ...);
+                // after a finished value it starts a comment, so `x = 5 #bad idea` works
+                let value_expected = match toks.last().map(|t| &t.tok) {
+                    Some(Tok::Sym(s)) => !matches!(*s, ")" | "]" | "}"),
+                    Some(Tok::Ident(w)) => VALUE_WORDS.contains(&w.as_str()),
+                    Some(Tok::Newline | Tok::Indent | Tok::Dedent) | None => false,
+                    _ => false,
+                };
+                if let Some(j) = color_end(&c, i).filter(|_| value_expected) {
                     push!(Tok::Color(c[i + 1..j].iter().collect()));
                     i = j;
                 } else {
@@ -234,4 +246,20 @@ pub fn lex(src: &str) -> R<Vec<Token>> {
     }
     push!(Tok::Eof);
     Ok(toks)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{lex, Tok};
+
+    fn colors(src: &str) -> usize {
+        lex(src).unwrap().iter().filter(|t| matches!(t.tok, Tok::Color(_))).count()
+    }
+
+    #[test]
+    fn hash_is_a_comment_after_a_value_and_a_color_where_a_value_goes() {
+        assert_eq!(colors("x = 5 #bad idea\n"), 0);
+        assert_eq!(colors("#face\n"), 0);
+        assert_eq!(colors("c = #FF0000\nchange c to #fff\nl = [#000, #111]\n"), 4);
+    }
 }

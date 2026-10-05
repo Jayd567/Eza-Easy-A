@@ -63,10 +63,9 @@ Eza scripts are plain text files ending in `.eza`. Run them from a terminal:
 |---|---|
 | `eza` | Starts the interactive prompt (type code line by line) |
 | `eza game.eza` | Runs a script. If it has a `scene`, `stage` or `gui`, a window opens |
-| `eza play game.eza` | Exactly the same as `eza game.eza` |
 | `eza run game.eza` | Runs a script in the terminal only, never opens a window |
 | `eza tool.eza a b` | Runs a script and hands it `a` and `b` in [`args`](#27-command-line-arguments-args) |
-| `eza check game.eza` | Finds mistakes without running anything (prints `OK`). See [finding mistakes](#45-finding-and-fixing-mistakes) |
+| `eza check game.eza` | Finds mistakes without running anything (prints `OK`). `eza check` on its own checks every file in the folder. See [finding mistakes](#45-finding-and-fixing-mistakes) |
 | `eza explain E003` | Explains an error code in detail (`eza explain` lists them all) |
 | `eza test` | Runs the `test` blocks in every `.eza` file in this folder (or `eza test game.eza`) |
 | `eza build game.eza` | Makes `dist/game/game.exe` to share. See [sharing](#46-sharing-your-program-eza-build) |
@@ -99,14 +98,14 @@ print("Hello!")
 print("This runs second.")
 ```
 
-### Comments start with `#` followed by a space
+### Comments start with `#`
 
 ```eza
 # This whole line is a comment
 score = 10   # a comment after code
 ```
 
-> Always put a **space** after `#`. Eza uses `#` for colors too, so `#add` or `#fed` (which look like hex numbers) would be read as a color, not a comment.
+`#` is also how colors are written (`#FF0000`). Eza tells them apart by where they are: a line that starts with `#` is always a comment, and so is a `#` after a finished value (like the `10` above). A `#` where a value goes, such as after `=` or `to`, is a color.
 
 ### Blocks use indentation
 
@@ -387,8 +386,8 @@ Methods are called with a dot. **When a method takes no arguments, the `()` is o
 | `.capitalize` | first letter capital, rest lowercase | `"hELLO".capitalize` | `"Hello"` |
 | `.length` | number of characters | `"hello".length` | `5` |
 | `.trim` | remove spaces at both ends | `"  hi  ".trim` | `"hi"` |
-| `.trimleft` | remove spaces at the start | `"  hi".trimleft` | `"hi"` |
-| `.trimright` | remove spaces at the end | `"hi  ".trimright` | `"hi"` |
+| `.trim_left` | remove spaces at the start | `"  hi".trim_left` | `"hi"` |
+| `.trim_right` | remove spaces at the end | `"hi  ".trim_right` | `"hi"` |
 | `.reverse` | backwards | `"abc".reverse` | `"cba"` |
 | `.split(sep)` | break into a list | `"a,b,c".split(",")` | `["a", "b", "c"]` |
 | `.split` | split on spaces | `"a b".split` | `["a", "b"]` |
@@ -538,11 +537,12 @@ change fruits by "fig"          # add to the end
 | `.min` | smallest | `nums.min` | `1` |
 | `.max` | largest | `nums.max` | `9` |
 | `.sort` | sorted copy | `nums.sort` | `[1, 3, 5, 9]` |
-| `.sortBy(f)` | sorted by what function `f` returns | `["kiwi", "fig"].sortBy(len)` | `["fig", "kiwi"]` |
+| `.sort_by(f)` | sorted by what function `f` returns | `["kiwi", "fig"].sort_by(len)` | `["fig", "kiwi"]` |
 | `.reverse` | reversed copy | `nums.reverse` | `[1, 9, 3, 5]` |
 | `.contains(x)` | is `x` in the list? | `nums.contains(9)` | `true` |
-| `.add(x)` | copy with `x` added at the end | `nums.add(7)` | `[5, 3, 9, 1, 7]` |
-| `.remove(x)` | copy with the first `x` taken out | `nums.remove(3)` | `[5, 9, 1]` |
+| `.add(x)` | adds `x` at the end (the list changes) | `nums.add(7)` | `[5, 3, 9, 1, 7]` |
+| `.remove(x)` | takes the first `x` out (the list changes) | `nums.remove(3)` | `[5, 9, 1]` |
+| `.count` | how many items (the same as `len(nums)`) | `nums.count` | `4` |
 | `.join(sep)` | all items as one text | `nums.join("-")` | `"5-3-9-1"` |
 | `.join` | joined with nothing between | `["a", "b"].join` | `"ab"` |
 | `.repeat(n)` | the list repeated `n` times | `[0].repeat(3)` | `[0, 0, 0]` |
@@ -637,9 +637,11 @@ change settings["lang"] to "en"  # adds a new key
 | `.length` | number of keys | `{a: 1}.length` | `1` |
 | `.has(key)` | is the key there? | `settings.has("lang")` | `true` |
 | `.get(key, default)` | the value, or the default if the key is missing | `settings.get("size", 12)` | `12` |
-| `.remove(key)` | a copy without that key | `change settings to settings.remove("tags")` | |
+| `.remove(key)` | takes the key out | `settings.remove("tags")` | |
 
 Reading a key that doesn't exist with `.` or `[ ]` is an error. Use `.get` when a key might be missing.
+
+**Keys come first.** `settings.theme` reads the key `theme`. If a dictionary has a key with the same name as a method (say a key called `keys` or `length`, which happens with data loaded from files), the dot reads the key. Add brackets to use the method instead: `settings.keys()` is always the list of keys.
 
 ### Looping
 
@@ -826,6 +828,7 @@ greet("Ada")             # Hello, Ada
 ```
 
 - The name comes first, then the parameter names separated by commas. The comma after the function name is optional: `define greet name` also works.
+- If you like brackets (like when calling it), those work too: `define greet(name)`, `define heal(target, amount)`.
 - A function with no parameters is just `define say_hi`.
 - **Calling always uses parentheses**, even with no arguments: `say_hi()`.
 
@@ -883,7 +886,7 @@ vortex = define entity
 vortex(enemy)
 ```
 
-Functions are values: you can pass them to other functions, like `fruits.sortBy(len)`.
+Functions are values: you can pass them to other functions, like `fruits.sort_by(len)`.
 
 <a id="short-functions-"></a>
 ### Short functions: `->`
@@ -1052,7 +1055,7 @@ people = [{name: "Ada", city: "London", age: 36}, {name: "Lin", city: "Paris", a
 
 print(people.filter({city: "London"}).map(p -> p.name))   # ["Ada", "Bo"]
 print(people.map(p -> p.age).sum)                          # 106
-print(people.sortBy(p -> p.age).first.name)                # Lin
+print(people.sort_by(p -> p.age).first.name)                # Lin
 
 by_city = people.group_by("city")
 each city in by_city
@@ -1073,7 +1076,7 @@ handle
 ```
 
 - Inside `handle`, the variable `error` holds the error message as text.
-- You can pick a different name for it: `handle problem`.
+- You can pick a different name for it: `handle as problem` (or just `handle problem`).
 - `handle` goes on its own line, lined up with `attempt`.
 
 ### What errors look like
@@ -1110,12 +1113,14 @@ param mimic_budget = 500
 param gravity = -9.8
 ```
 
-`param` sets a global setting, creating it or replacing it. Two settings are built in:
+`param` sets one of Eza's settings, creating it or replacing it. Two settings are built in:
 
 | Setting | Default | What it controls |
 |---|---|---|
-| `gravity` | `-20` | how fast physics objects fall (see [physics](#physics)) |
+| `gravity` | `-20` | how fast 3D physics objects fall (you can also write `scene gravity=-9.8`, like `stage gravity=`; see [physics](#physics)) |
 | `mimic_budget` | `1000` | how much `mimic` simulation work is allowed per frame |
+
+`param` is for **settings**; `global` (below) is for **your own values** that need to reach another script.
 
 ### `global`: a shared notebook
 
@@ -1572,7 +1577,7 @@ else
 - `args` is always a list, and `[]` when nothing was typed.
 - Every item is text: turn numbers into numbers with `num(args[0])`.
 - Put words with spaces in quotes: `eza notes.eza "shopping list"` gives `["shopping list"]`.
-- It works the same with `eza run tool.eza a b` and `eza play game.eza a b`.
+- It works the same with `eza run tool.eza a b`.
 - A program made with [`eza build`](#46-sharing-your-program-eza-build) gets them too: `greet.exe Ada 3`.
 
 ---
@@ -1608,6 +1613,8 @@ else
 | `raycast(from=, direction=, distance=)` | the first thing along a line | | see [2D](#touching-and-looking) |
 | `find_path(grid, start, goal)` | the way through a grid, around walls | `find_path(["..#", "..."], [0, 0], [2, 1])` | see [pathfinding](#finding-a-way-pathfinding) |
 
+**Brackets on methods:** a method that needs nothing passed to it can be written with or without `()`: `name.upper` and `name.upper()` are the same. A method that takes something always needs them: `name.replace("a", "b")`.
+
 Every value also has two universal methods:
 
 - `x.type` is the same as `type(x)`
@@ -1615,7 +1622,7 @@ Every value also has two universal methods:
 
 Some things that read files or change things are **statements** instead of functions (no parentheses): `load`, `save`, `append`, `push`, `pop`, `play`, `stop`, `emit`, `go to`, `use`. They're explained in their own sections.
 
-> `print` needs parentheses: `print("hi")`, not `print "hi"`. `num("abc")` is an error because `"abc"` isn't a number.
+> `print` works with or without brackets: `print("hi", score)` or `print "hi", score`. Every other function needs them: `len(name)`. `num("abc")` is an error because `"abc"` isn't a number.
 
 ---
 
@@ -1655,12 +1662,12 @@ on player.health <= 0
 - `on` doesn't run straight away. It's checked once per frame.
 - It fires **once when the condition turns true**, not on every frame while it stays true. It can fire again after the condition has been false and then turns true again.
 
-### Every frame: `on scene.ticks`
+### Every frame: `on every frame`
 
-To run code on every single frame, use `on scene.ticks`. This is where game logic usually goes:
+To run code on every single frame, use `on every frame`. This is where game logic usually goes (older scripts write `on scene.ticks`, which means the same):
 
 ```eza
-on scene.ticks
+on every frame
     if keyboard.held("d")
         change player.position.x by 0.1
 ```
@@ -1670,7 +1677,7 @@ on scene.ticks
 Inside an `on` block, `return` stops this frame's run of the block:
 
 ```eza
-on scene.ticks
+on every frame
     if paused
         return
     change enemy.position.x by 0.05
@@ -1712,7 +1719,7 @@ on hero touches Coin as h, coin
 - Each pair counts on its own: two coins touched at once run the block twice, once per coin.
 - A pair that keeps touching doesn't run it again; it has to come apart and touch again.
 - An invisible sprite (`visible=false`) makes a good **trigger zone**: `on hero touches exit_zone`.
-- `a.collides_with(b)` is still there for checking right now, inside `if`.
+- To check right now instead (inside `if`), use the method: `if hero.touches(lava)`. Older scripts call it `collides_with`, which still works.
 
 ### Your own events: `trigger` and `on event`
 
@@ -1793,14 +1800,14 @@ persist
 for 180 steps
 ```
 
-Note the `for ...` line goes after the indented block, lined up with `persist`.
+Note the `for ...` line goes after the indented block, lined up with `persist`. Seconds work too: `for 3 seconds` (one second is 60 frames).
 
 ### Ending when something happens: `until`
 
 ```eza
 persist
     change player.speed by -5
-until player.collides_with(dry_ground)
+until player.touches(dry_ground)
 ```
 
 ### Whichever comes first
@@ -1808,7 +1815,7 @@ until player.collides_with(dry_ground)
 ```eza
 persist
     change player.speed by -5
-until player.collides_with(dry_ground) or 120 steps
+until player.touches(dry_ground) or 2 seconds
 ```
 
 ### On one line
@@ -1853,6 +1860,7 @@ tween player.position to [0, 2, 0] over 60 steps ease ease_out
 
 - You can tween numbers, colors, and lists of the same length (like positions).
 - The thing you tween must already exist.
+- Seconds work too: `tween door.position.y to 5 over 1.5 seconds`.
 
 ### Easing (how it speeds up and slows down)
 
@@ -1870,10 +1878,10 @@ tween player.position to [0, 2, 0] over 60 steps ease ease_out
 
 ### Is it still moving?
 
-While an object has a tween running, `.animating` (or `.is_tweening`) is `true`:
+While an object has a tween running, `.tweening` is `true` (older scripts call it `.animating`):
 
 ```eza
-if not door.animating
+if not door.tweening
     tween door.position.y to 0 over 60 steps
 ```
 
@@ -1989,14 +1997,17 @@ kind "optional label" key=value key=value ...
 ```
 
 - Children are indented under their parent.
-- Property values must be written out directly. They can be:
+- The label names the thing: `cube "wall" position=5,1,0` makes a variable called `wall` (the same as `name="wall"`), just like `gui window "hud"` makes `hud`.
+- Property values can be:
   - numbers: `width=4`, `x=-2`
   - text: `name="wall"`
   - colors: `color=#FF0000`
   - `true` / `false`
-  - bare words, which become text: `mood=angry`
-  - vectors, as numbers with commas and no spaces: `position=0,1,0`
-- Variables and math can't go in property values: `position=x,0,0` would store the text `"x"`. To place things using calculations, `change` them after the scene, or use [`spawn`](#39-templates-and-live-objects-prefab-spawn-destroy).
+  - bare words, which are text: `mood=angry` is the same as `mood="angry"`
+  - vectors and lists, in brackets like everywhere else (`position=[0, 1, 0]`), or as numbers with commas and no spaces (`position=0,1,0`)
+  - **anything from your code, in round brackets**: `width=(size * 2)`, `position=([x, 0, z])`, `color=(team_color)`
+- Without the round brackets, a word is text: `position=x,0,0` would store the text `"x"`.
+- Characters (any kind that isn't a shape, like `player` or `enemy`) start with `health=100` and `speed=1`, so games can use them straight away.
 
 ### Kinds of things
 
@@ -2074,13 +2085,13 @@ scene
 
 Use a high `seg` (like 64 to 128) so the surface has enough detail to show the bumps.
 
-### Touching: `collides_with`
+### Touching: `touches`
 
 ```eza
-if player.collides_with(coin)
+if player.touches(coin)
     print("Got it!")
 
-if player.collides_with([wall1, wall2, lava])    # touching any of them?
+if player.touches([wall1, wall2, lava])    # touching any of them?
     print("bump")
 ```
 
@@ -2100,7 +2111,7 @@ scene
 
 - Physics objects get a `velocity` (units per second) and a `grounded` flag (`true` while standing on something).
 - `plane`, `cube`, `sphere` and `cylinder` are solid by default. Add `solid=false` to walk through one, or `solid=true` to make anything else an obstacle.
-- Gravity is `-20` by default. Change it with `param gravity = -9.8`.
+- Gravity is `-20` by default. Change it with `scene gravity=-9.8` (or `param gravity = -9.8`).
 - There's no friction: something sliding keeps going until it hits an obstacle.
 
 ```eza
@@ -2128,7 +2139,7 @@ Input only does anything in a window. In a terminal-only script, keys and button
 
 There are two ways to use input, and both are fine:
 
-- **Checking every frame** (best for movement): `if keyboard.held("a")` inside `on scene.ticks`.
+- **Checking every frame** (best for movement): `if keyboard.held("a")` inside `on every frame`.
 - **Reacting once** (best for jumps, shooting, menus): `on keyboard.pressed("space")`.
 
 ---
@@ -2195,7 +2206,7 @@ Most characters have several animations. Name them with `animations`, then pick 
 stage
     sprite name="hero" texture=hero_sheet frame_size=32,32 animations={idle: [0], walk: [1, 2, 0], jump: [3]} animation="idle" fps=10
 
-on scene.ticks
+on every frame
     if hero.velocity.x != 0
         change hero.animation to "walk"
     else
@@ -2251,7 +2262,7 @@ Add `physics=true` to a **named** sprite to make it fall and land:
 - Tilemaps and sprites with `solid=true` are obstacles.
 
 ```eza
-on scene.ticks
+on every frame
     change hero.velocity.x to 0
     if keyboard.held("d")
         change hero.velocity.x to 220
@@ -2262,8 +2273,8 @@ on keyboard.pressed("space")
 
 ### Touching and looking
 
-- `hero.collides_with(slime)` checks if two sprites overlap (origin and scale are taken into account).
-- `hero.collides_with(level)` checks against the solid tiles of a tilemap.
+- `hero.touches(slime)` checks if two sprites overlap right now (origin and scale are taken into account).
+- `hero.touches(level)` checks against the solid tiles of a tilemap.
 - `raycast` looks along a line and tells you the first thing it hits:
 
 ```eza
@@ -2278,10 +2289,10 @@ To run code when things start (or stop) touching, use [`on hero touches slime`](
 
 ### Finding a way: pathfinding
 
-`path_to` on a tilemap works out how to walk from one point to another **around the solid tiles**. It gives a list of points (the middles of the tiles to walk through), or `none` if there's no way through:
+`find_path` on a tilemap works out how to walk from one point to another **around the solid tiles**. It gives a list of points (the middles of the tiles to walk through), or `none` if there's no way through:
 
 ```eza
-route = walls.path_to(slime.position, hero.position)
+route = walls.find_path(slime.position, hero.position)
 ```
 
 To follow it, move toward the first point; when you get there, drop it and head for the next. `.move_toward(target, step)` moves a point at most `step` closer, without going past:
@@ -2289,23 +2300,23 @@ To follow it, move toward the first point; when you get there, drop it and head 
 ```eza
 route = []
 timer = 0
-on scene.ticks
+on every frame
     change timer by 1
     if timer % 30 == 1                 # twice a second, look for the way again
-        found = walls.path_to(slime.position, hero.position)
+        found = walls.find_path(slime.position, hero.position)
         if found != none
             change route to found
     if len(route) > 0
         change slime.position to slime.position.move_toward(route[0], 1.5)
         if distance(slime.position, route[0]) < 0.5
-            change route to route.remove(route[0])
+            route.remove(route[0])
 ```
 
-- It only goes up, down, left and right. `walls.path_to(a, b, true)` also allows diagonal steps (it never cuts across the corner of a wall).
+- It only goes up, down, left and right. `walls.find_path(a, b, true)` also allows diagonal steps (it never cuts across the corner of a wall).
 - It's made for top-down games (`gravity=0`): it doesn't know about jumping or falling.
 - Things that walk the path should be a bit smaller than a tile, so they fit through gaps.
 
-For a grid that isn't a tilemap, like a board game or a dungeon you made in a list, use `find_path(grid, start, goal)`. The grid is a list of text rows where `#` is a wall (or a list of lists where `true` or `1` is a wall), and places are `[column, row]`:
+For a grid that isn't a tilemap, like a board game or a dungeon you made in a list, use the function `find_path(grid, start, goal)` (`find_path(walls, a, b)` works for tilemaps too). The grid is a list of text rows where `#` is a wall (or a list of lists where `true` or `1` is a wall), and places are `[column, row]`:
 
 ```eza
 dungeon = [
@@ -2376,7 +2387,7 @@ Each particle gets a little randomness in its speed and life, so effects look na
 They're normal named objects, so `change` works:
 
 ```eza
-on scene.ticks
+on every frame
     change trail.position to hero.position     # the trail follows the hero
 change smoke.rate to 0                         # stop the smoke
 change sparks.color to #80D8FF
@@ -2531,7 +2542,22 @@ gui window "pause_menu" width=400 height=260 centered=true visible=false
 
 ### Naming
 
-The label of the top element becomes a variable, with any characters that aren't letters or digits turned into `_`. `"pause_menu"` becomes `pause_menu`, and `"Main Menu"` becomes `Main_Menu`. Get at the parts inside with `.children[i]`:
+The label of the top element becomes a variable, with any characters that aren't letters or digits turned into `_`. `"pause_menu"` becomes `pause_menu`, and `"Main Menu"` becomes `Main_Menu`.
+
+### Text that keeps itself up to date
+
+Put values in a label with `{ }`, and it **keeps showing the current value**, every frame, with no extra code:
+
+```eza
+score = 0
+gui window "hud" x=16 y=16
+    text "Score: {score}"
+    text "Coins left: {len(coins)}"
+
+change score by 10      # the window now says Score: 10
+```
+
+To change a label by hand instead, get at the parts inside with `.children[i]`:
 
 ```eza
 title = pause_menu.children[0].children[0]
@@ -2865,7 +2891,7 @@ It also **warns** about things that are probably mistakes, but won't stop the pr
 - **a variable a function creates but never uses** (start the name with `_`, like `_unused`, if that's on purpose)
 - **an event nobody listens for**, or an `on event` nothing ever triggers (usually a spelling mistake)
 
-It prints `OK` (or `OK (2 warning(s))`) when it finds no errors. In VS Code it runs **while you type** (a moment after you stop), and underlines the exact spot: red for errors, yellow for warnings.
+It prints `OK` (or `OK (2 warning(s))`) when it finds no errors. In VS Code it runs **while you type** (a moment after you stop), and underlines the exact spot: red for errors, yellow for warnings. `eza check` with no file checks every `.eza` file in the folder (and the folders inside it).
 
 ### Stack traces
 
@@ -2997,12 +3023,12 @@ param gravity = -9.8
 # ---- time
 tick / tick 10
 on condition                  # fires when it becomes true
-on scene.ticks                # every frame
+on every frame
 on hero touches Coin as h, c  # once per pair when they start touching (also: stops touching)
 on event "won" / trigger "won" with 10
 wait 30 steps / wait 1 second
-persist ... for 60 steps / until cond / until cond or 60 steps
-tween x.position to [0, 0, 0] over 60 steps ease ease_out
+persist ... for 60 steps / for 2 seconds / until cond / until cond or 60 steps
+tween x.position to [0, 0, 0] over 60 steps ease ease_out      (or: over 1 second)
 rewind x by 2 steps / rewind x to beginning / rewind scene by 3 steps
 mimic shadow to thing
     ...
@@ -3017,7 +3043,7 @@ prefab Coin
 c = spawn Coin at 1,1,1 value=10
 spawn Coin at 5,1,0 into coins       Coin.all   Coin.count   destroy Coin.all
 destroy c
-player.collides_with(c)
+player.touches(c)
 keyboard.pressed("space")    mouse.held("left")
 
 # ---- GUI
@@ -3039,7 +3065,7 @@ stage gravity=-980
     sprite name="hero" texture="hero.png" position=0,0 origin=bottom_center physics=true
     sprite name="bat" texture=bat_sheet frame_size=16,16 animations={fly: [0, 1, 2]} animation="fly" fps=10
 change stage.camera.position to hero.position
-route = level.path_to(slime.position, hero.position)    pos.move_toward(route[0], 2)
+route = level.find_path(slime.position, hero.position)    pos.move_toward(route[0], 2)
 find_path(["..#", "..."], [0, 0], [2, 1])
 hit = raycast(from=a.position, direction=[1, 0], distance=200)
 

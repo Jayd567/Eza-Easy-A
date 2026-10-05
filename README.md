@@ -47,15 +47,13 @@ on hero touches Coin as h, coin
     change score by 1
 ```
 
-A window with a working button takes six lines:
+A window with a working button takes four lines. The text keeps itself up to date:
 
 ```eza
 clicks = 0
 gui window "counter" centered=true gap=12
-    text "Clicks: 0" font_size=24
-    button "Click me" then
-        change clicks by 1
-        change counter.children[0].label to "Clicks: {clicks}"
+    text "Clicks: {clicks}" font_size=24
+    button "Click me" then change clicks by 1
 ```
 
 ## Learn it

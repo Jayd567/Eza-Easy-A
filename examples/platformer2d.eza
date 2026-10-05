@@ -14,7 +14,7 @@ change stage.camera.zoom to 1.5
 speed = 220
 coins = 0
 
-on scene.ticks
+on every frame
     # polled input: checked every frame
     moving = 0
     if keyboard.held("a") or keyboard.held("left")
@@ -45,10 +45,10 @@ on keyboard.pressed("space")
     if hero.grounded
         change hero.velocity.y to 620
 
-on hero.collides_with(slime)
+on hero touches slime
     print("Ouch!")
 
-on hero.collides_with(coin)
+on hero touches coin
     change coins by 1
     destroy coin
     print("Coins: {coins}")
