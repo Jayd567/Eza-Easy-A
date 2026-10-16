@@ -183,6 +183,7 @@ Every value in Eza has a type. `type(x)` (or `x.type`) tells you which.
 | Object | `Item(name="Sword")`, `player` | the object's kind, e.g. `Item` |
 | Dictionary | `{name: "Ada", hp: 10}` | `dict` |
 | Stack / queue | `stack()`, `queue()` | `stack` / `queue` |
+| Set | `set()`, `set([1, 2])` | `set` |
 | Picture | `load "hero.png"` | `image` |
 | Date | `now()`, `date("2026-10-04")` | `date` |
 | Database | `database("notes.db")` | `database` |
@@ -685,6 +686,39 @@ push "jump" to moves
 print("undo:", pop moves)      # undo: jump
 ```
 
+### Sets: no repeats
+
+A **set** holds each thing at most once. Adding something that's already there does nothing, which makes sets handy for "have I seen this before?"
+
+```eza
+seen = set()                  # empty
+tags = set(["red", "blue", "red"])
+print(tags)                   # set["red", "blue"]
+letters = set("hello")        # set["h", "e", "l", "o"]
+
+seen.add([3, 4])
+seen.add([3, 4])              # already there, nothing changes
+print([3, 4] in seen)         # true
+seen.remove([3, 4])           # takes it out (nothing happens if it isn't there)
+```
+
+| Method | Gives back | Example | Result |
+|---|---|---|---|
+| `.add(x)` | adds `x` if it isn't there yet (the set changes) | `tags.add("green")` | `set["red", "blue", "green"]` |
+| `.remove(x)` | takes `x` out (the set changes) | `tags.remove("red")` | `set["blue"]` |
+| `.contains(x)` | is `x` in the set? (the same as `x in tags`) | `tags.contains("red")` | `true` |
+| `.length` | how many items (the same as `len(tags)`) | `tags.length` | `2` |
+| `.empty` | `true` when there's nothing in it | `set().empty` | `true` |
+| `.union(other)` | everything in either one | `set([1, 2]).union([2, 3])` | `set[1, 2, 3]` |
+| `.intersection(other)` | only what's in both | `set([1, 2]).intersection([2, 3])` | `set[2]` |
+| `.difference(other)` | what's in this one but not the other | `set([1, 2]).difference([2, 3])` | `set[1]` |
+
+- `other` can be a set or a list. `.union`, `.intersection` and `.difference` give back a new set and leave both alone.
+- Items stay in the order they were first added, and `each item in tags` goes through them in that order.
+- Two sets are `==` when they hold the same items, in any order: `set([1, 2]) == set([2, 1])` is `true`.
+- An empty set counts as false in an `if`, like an empty list.
+- Sets don't use `push` and `pop`. Use `.add` and `.remove`.
+
 ---
 
 ## 10. Dictionaries
@@ -882,6 +916,7 @@ What you can loop over:
 | a range | `each i in 2 to 5` | `2, 3, 4, 5` (see [ranges](#ranges-to)) |
 | a dictionary | `each key in settings` | each key |
 | a stack or queue | `each item in s` | each item, oldest first |
+| a set | `each tag in tags` | each item, in the order they were added |
 
 **Changing the loop variable changes the list.** When you loop over a list stored in a variable, `change`-ing the loop variable writes back into the list:
 
@@ -1979,6 +2014,7 @@ See [`examples/website.eza`](examples/website.eza): a high-score site with a for
 | `lerp(a, b, t)` | blend between two values | | see [vectors](#11-vectors-positions-and-directions) |
 | math | `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`, `radians`, `degrees` | | see [numbers](#7-numbers) |
 | `stack(list)` / `queue(list)` | a new stack or queue, optionally with starting items | `stack([1, 2])` | |
+| `set(list)` | a new set (no repeats), optionally with starting items | `set([1, 1, 2])` | `set[1, 2]` |
 | `exists(path)` | is there a file or folder at this path? | `exists("save.json")` | `true` / `false` |
 | `files` / `folders` / `find_files` / `file_info` | look around folders | `files("photos", "*.png")` | see [files and folders](#25-files-and-folders) |
 | `make_folder` / `copy_file` / `move_file` / `delete_file` / `delete_folder` | change files and folders | `copy_file("a.txt", "backup")` | see [files and folders](#25-files-and-folders) |
@@ -3441,6 +3477,7 @@ gui window "hud" x=16 y=16 width=200 height=60
 # ---- data
 s = stack()   push 5 to s   top = pop s   s.peek   s.empty
 q = queue()   push "a" to q   first = pop q
+seen = set()   seen.add(x)   x in seen   seen.remove(x)   a.union(b)   a.intersection(b)   a.difference(b)
 d = {name: "Ada", hp: 10}   d.name   d["hp"]   d.get("x", 0)   d.has("x")
 save d to "save.json"   d2 = load "save.json"   append "line" to "log.txt"
 pic = load "map.png"   pic.pixel(0, 0)   exists("map.png")
