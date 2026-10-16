@@ -141,6 +141,18 @@ impl Value {
     pub fn list(v: Vec<Value>) -> Value {
         Value::List(Rc::new(v))
     }
+    /// set(...): the items without repeats, kept in the order they first appeared
+    pub fn set(items: impl IntoIterator<Item = Value>) -> Value {
+        let mut kept: Vec<Value> = vec![];
+        for v in items {
+            if !kept.iter().any(|k| equals(k, &v)) {
+                kept.push(v);
+            }
+        }
+        let mut o = Obj::new("set");
+        o.set("items", Value::list(kept));
+        Value::obj(o)
+    }
     pub fn type_name(&self) -> String {
         match self {
             Value::None => "none".into(),
@@ -168,6 +180,7 @@ impl Value {
             Value::Num(n) => *n != 0.0,
             Value::Str(s) => !s.is_empty(),
             Value::List(l) => !l.is_empty(),
+            Value::Obj(o) if o.type_name == "set" => !set_items(o).is_empty(),
             _ => true,
         }
     }
@@ -199,7 +212,7 @@ impl Value {
                     let body: Vec<String> = o.fields.iter().map(|(k, v)| format!("{}: {}", key(k), v.repr())).collect();
                     return format!("{{{}}}", body.join(", "));
                 }
-                "stack" | "queue" => {
+                "stack" | "queue" | "set" => {
                     let items = o.get("items").map(|v| v.repr()).unwrap_or_else(|| "[]".into());
                     return format!("{}{}", o.type_name, items);
                 }
@@ -250,6 +263,11 @@ pub fn equals(a: &Value, b: &Value) -> bool {
             Rc::ptr_eq(x, y) || (x.len() == y.len() && x.iter().zip(y.iter()).all(|(p, q)| equals(p, q)))
         }
         (Value::Obj(x), Value::Obj(y)) if Rc::ptr_eq(x, y) => true,
+        // sets are equal when they hold the same items, in any order
+        (Value::Obj(x), Value::Obj(y)) if x.type_name == "set" && y.type_name == "set" => {
+            let (a, b) = (set_items(x), set_items(y));
+            a.len() == b.len() && a.iter().all(|v| b.iter().any(|w| equals(v, w)))
+        }
         (Value::Obj(x), Value::Obj(y)) => {
             x.type_name == y.type_name
                 && x.fields.len() == y.fields.len()
@@ -261,6 +279,14 @@ pub fn equals(a: &Value, b: &Value) -> bool {
         (Value::Native(x), Value::Native(y)) => x == y,
         (Value::Module(x), Value::Module(y)) => Rc::ptr_eq(x, y),
         _ => false,
+    }
+}
+
+/// The items inside a set (or a stack or queue).
+pub fn set_items(o: &Obj) -> Rc<Vec<Value>> {
+    match o.get("items") {
+        Some(Value::List(l)) => l.clone(),
+        _ => Rc::new(vec![]),
     }
 }
 

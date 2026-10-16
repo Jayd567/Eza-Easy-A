@@ -6,7 +6,7 @@ use std::rc::Rc;
 
 pub const BUILTINS: &[&str] = &[
     "print", "len", "str", "num", "int", "range", "random", "random_int", "input", "type", "sin", "cos", "tan", "asin",
-    "acos", "atan", "atan2", "radians", "degrees", "distance", "lerp", "chr", "ord", "stack", "queue", "exists", "raycast",
+    "acos", "atan", "atan2", "radians", "degrees", "distance", "lerp", "chr", "ord", "stack", "queue", "set", "exists", "raycast",
     "now", "today", "date", "fetch", "database", "files", "folders", "find_files", "file_info", "is_folder", "make_folder",
     "copy_file", "move_file", "delete_file", "delete_folder", "run", "find_path", "table", "panel", "progress", "clear",
     "quit",
@@ -29,6 +29,15 @@ fn arg<'a>(it: &Interp, args: &'a [Value], i: usize, method: &str) -> R<&'a Valu
     match args.get(i) {
         Some(v) => Ok(v),
         None => err(it, format!(".{} needs {} argument(s)", method, i + 1)),
+    }
+}
+/// The items a set can be made from: a list, another set, a stack or queue, or the letters of some text.
+fn set_arg(it: &Interp, v: &Value, what: &str) -> R<Rc<Vec<Value>>> {
+    match crate::interp::deref_val(v.clone()) {
+        Value::List(l) => Ok(l),
+        Value::Obj(o) if o.type_name == "set" || o.type_name == "stack" || o.type_name == "queue" => Ok(set_items(&o)),
+        Value::Str(s) => Ok(Rc::new(s.chars().map(|c| Value::Str(c.to_string())).collect())),
+        other => err(it, format!("{} needs a list or a set, got {}", what, other.type_name())),
     }
 }
 fn arg_num(it: &Interp, args: &[Value], i: usize, method: &str) -> R<f64> {
@@ -133,7 +142,7 @@ pub fn builtin(it: &mut Interp, name: &str, args: Vec<Value>, named: Vec<(String
             Value::Str(s) => Value::Num(s.chars().count() as f64),
             Value::List(l) => Value::Num(l.len() as f64),
             Value::Obj(o) if o.type_name == "dict" => Value::Num(o.fields.len() as f64),
-            Value::Obj(o) if o.type_name == "stack" || o.type_name == "queue" => match o.get("items") {
+            Value::Obj(o) if o.type_name == "stack" || o.type_name == "queue" || o.type_name == "set" => match o.get("items") {
                 Some(Value::List(l)) => Value::Num(l.len() as f64),
                 _ => Value::Num(0.0),
             },
@@ -185,6 +194,11 @@ pub fn builtin(it: &mut Interp, name: &str, args: Vec<Value>, named: Vec<(String
             o.set("items", Value::list(items));
             Value::obj(o)
         }
+        // set(), set([1, 2, 2]) or set("hello"): no repeats
+        "set" => match args.first() {
+            None => Value::set(vec![]),
+            Some(v) => Value::set((*set_arg(it, v, "set()")?).clone()),
+        },
         // find_path(walls, from, to): a tilemap works too, the same as walls.find_path(from, to)
         "find_path" if matches!(args.first(), Some(Value::Obj(o)) if o.type_name == "tilemap") => {
             let map = args[0].clone();
@@ -359,6 +373,32 @@ pub fn call(it: &mut Interp, recv: Value, name: &str, args: Vec<Value>, called: 
                     // the item `pop` would give next
                     _ if o.type_name == "queue" => items.first().cloned().unwrap_or(Value::None),
                     _ => items.last().cloned().unwrap_or(Value::None),
+                }))
+            }
+            // sets: .add and .remove change the set they're called on (see call_inner)
+            "add" | "remove" | "contains" | "length" | "empty" | "union" | "intersection" | "difference" if o.type_name == "set" => {
+                let items = set_items(o);
+                Ok(Some(match name {
+                    "add" => Value::set(items.iter().cloned().chain([arg(it, &args, 0, name)?.clone()])),
+                    "remove" => {
+                        let x = arg(it, &args, 0, name)?;
+                        Value::set(items.iter().filter(|v| !equals(v, x)).cloned())
+                    }
+                    "contains" => {
+                        let x = arg(it, &args, 0, name)?;
+                        Value::Bool(items.iter().any(|v| equals(v, x)))
+                    }
+                    "length" => Value::Num(items.len() as f64),
+                    "empty" => Value::Bool(items.is_empty()),
+                    _ => {
+                        let other = set_arg(it, arg(it, &args, 0, name)?, &format!(".{}", name))?;
+                        let in_other = |v: &Value| other.iter().any(|w| equals(v, w));
+                        match name {
+                            "union" => Value::set(items.iter().chain(other.iter()).cloned()),
+                            "intersection" => Value::set(items.iter().filter(|v| in_other(v)).cloned()),
+                            _ => Value::set(items.iter().filter(|v| !in_other(v)).cloned()),
+                        }
+                    }
                 }))
             }
             // 2D camera: screen pixels (top-left origin) <-> world (y up)

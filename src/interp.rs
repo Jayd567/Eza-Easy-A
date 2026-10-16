@@ -1000,7 +1000,7 @@ impl Interp {
                     Value::Num(n) => (0..n.max(0.0) as i64).map(|i| Value::Num(i as f64)).collect(),
                     Value::Str(s) => s.chars().map(|c| Value::Str(c.to_string())).collect(),
                     Value::Obj(o) if o.type_name == "dict" => o.fields.iter().map(|(k, _)| Value::Str(k.clone())).collect(),
-                    Value::Obj(o) if o.type_name == "stack" || o.type_name == "queue" => match o.get("items") {
+                    Value::Obj(o) if o.type_name == "stack" || o.type_name == "queue" || o.type_name == "set" => match o.get("items") {
                         Some(Value::List(l)) => (**l).clone(),
                         _ => vec![],
                     },
@@ -1289,6 +1289,7 @@ impl Interp {
                                 None => ob.set("items", Value::list(vec![v])),
                             }
                         }
+                        Value::Obj(o) if o.type_name == "set" => return it.rt("sets don't use push - add to one with  s.add(x)"),
                         other => return it.rt(format!("push needs a list, stack or queue, but this is {}", other.type_name())),
                     }
                     Ok(Value::None)
@@ -2105,7 +2106,7 @@ impl Interp {
                                 Value::Num(n) => (0..n.max(0.0) as i64).map(|i| Value::Num(i as f64)).collect(),
                                 Value::Str(s) => s.chars().map(|c| Value::Str(c.to_string())).collect(),
                                 Value::Obj(o) if o.type_name == "dict" => o.fields.iter().map(|(k, _)| Value::Str(k.clone())).collect(),
-                    Value::Obj(o) if o.type_name == "stack" || o.type_name == "queue" => match o.get("items") {
+                    Value::Obj(o) if o.type_name == "stack" || o.type_name == "queue" || o.type_name == "set" => match o.get("items") {
                         Some(Value::List(l)) => (**l).clone(),
                         _ => vec![],
                     },
@@ -2625,7 +2626,7 @@ impl Interp {
                 o.fields.iter().map(|(k, v)| Value::list(vec![Value::Str(k.clone()), v.clone()])).collect()
             }
             Value::Obj(o) if o.type_name == "dict" => o.fields.iter().map(|(k, _)| Value::Str(k.clone())).collect(),
-            Value::Obj(o) if o.type_name == "stack" || o.type_name == "queue" => match o.get("items") {
+            Value::Obj(o) if o.type_name == "stack" || o.type_name == "queue" || o.type_name == "set" => match o.get("items") {
                 Some(Value::List(l)) => (**l).clone(),
                 _ => vec![],
             },
@@ -3326,7 +3327,7 @@ impl Interp {
                         other => return self.rt(format!("'in' on text looks for text inside it, but this is {}", other.type_name())),
                     },
                     Value::Obj(o) if o.type_name == "dict" => o.get(&key_str(&x)).is_some(),
-                    Value::Obj(o) if o.type_name == "stack" || o.type_name == "queue" => {
+                    Value::Obj(o) if o.type_name == "stack" || o.type_name == "queue" || o.type_name == "set" => {
                         matches!(o.get("items"), Some(Value::List(items)) if items.iter().any(|v| equals(v, &x)))
                     }
                     other => {
@@ -3409,6 +3410,7 @@ impl Interp {
                             None => return it.rt("there's nothing to pop - it's empty"),
                         }
                     }
+                    Value::Obj(o) if o.type_name == "set" => return it.rt("sets don't use pop - take an item out with  s.remove(x)"),
                     other => return it.rt(format!("pop needs a list, stack or queue, but this is {}", other.type_name())),
                 };
                 if list.is_empty() {
@@ -3542,10 +3544,11 @@ impl Interp {
                 let f = self.module_get(m, name)?;
                 return self.call_value(f, vals, named, aliases);
             }
-            // list.add(x) / list.remove(x) / dict.remove(key) change the list or dictionary they're called on
+            // list.add(x) / list.remove(x) / dict.remove(key) / set.add(x) / set.remove(x) change what they're called on
             let changes_it = match (&o, name.as_str()) {
                 (Value::List(_), "add" | "remove") => true,
-                (Value::Obj(ob), "remove") => ob.type_name == "dict",
+                (Value::Obj(ob), "add") => ob.type_name == "set",
+                (Value::Obj(ob), "remove") => ob.type_name == "dict" || ob.type_name == "set",
                 _ => false,
             };
             let r = methods::call(self, o, name, vals, true)?;
@@ -3830,6 +3833,45 @@ mod tests {
         it.tick().unwrap();
         assert_eq!(num(&it, "a"), 41.0);
         assert!(it.debug_watch(10).iter().any(|l| l.starts_with("* a = 41")));
+    }
+
+    #[test]
+    fn sets_keep_one_of_each() {
+        let mut it = Interp::new(Path::new("test.eza"));
+        let src = "s = set([3, 1, 3, 2])\n\
+                   s.add(5)\n\
+                   s.add(3)\n\
+                   s.remove(1)\n\
+                   a = set([1, 2, 3])\n\
+                   b = set([2, 3, 4])\n\
+                   u = a.union(b)\n\
+                   i = a.intersection(b)\n\
+                   d = a.difference(b)\n\
+                   total = 0\n\
+                   each x in a\n    change total by x\n\
+                   empty = set()\n\
+                   data Walker\n    seen = set()\n    define visit(p)\n        self.seen.add(p)\n\
+                   w = Walker()\n\
+                   w.visit([1, 2])\n\
+                   w.visit([1, 2])\n";
+        it.run_source(src, "test.eza").unwrap();
+        let shown = |name: &str| it.global(name).map(|v| v.repr()).unwrap_or_default();
+        assert_eq!(shown("s"), "set[3, 2, 5]");
+        assert_eq!(shown("u"), "set[1, 2, 3, 4]");
+        assert_eq!(shown("i"), "set[2, 3]");
+        assert_eq!(shown("d"), "set[1]");
+        assert_eq!(num(&it, "total"), 6.0);
+        let empty = it.global("empty").unwrap();
+        assert!(!empty.truthy());
+        assert_eq!(empty.type_name(), "set");
+        // order doesn't matter when comparing sets
+        let (x, y) = (Value::set(vec![Value::Num(1.0), Value::Num(2.0)]), Value::set(vec![Value::Num(2.0), Value::Num(1.0)]));
+        assert!(equals(&x, &y));
+        // .add on a set inside an object changes that object's set
+        match it.global("w") {
+            Some(Value::Obj(o)) => assert_eq!(o.get("seen").map(|v| v.repr()).unwrap_or_default(), "set[[1, 2]]"),
+            _ => panic!("w is not an object"),
+        }
     }
 }
 

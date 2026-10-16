@@ -25,6 +25,7 @@ Files ending in `.eza` are written in **Eza**, its own language (run with `eza f
 | `x if cond else y`, `cond ? a : b` | an `if` / `else` block (Eza has no inline if) |
 | `a ?? b`, `a \|\| b` | `a or b` (gives the first value that counts as true) |
 | `x in list` / `list.includes(x)` | `x in list` (also text, dictionary keys, `x in 1 to 10`) |
+| `set()`, `{1, 2}`, `s.add(x)`, `a \| b` | `set()`, `set([1, 2])`, `s.add(x)`, `a.union(b)` (also `.intersection`, `.difference`) |
 | `elif` / `else:` | `else if` / `else` (no colons anywhere) |
 | `None`, `null`, `True`, `False` | `none`, `true`, `false` |
 | `import x` / `from x import y` | `use "x.eza"` (names reached as `x.name`), or `include "x.eza"` |
@@ -98,6 +99,7 @@ d = {name: "Ada", hp: 10}      # dictionary: d.name, d["hp"], d.get("x", 0), d.h
 s = stack()
 push 5 to s
 top = pop s
+seen = set([1, 2, 2])          # set: no repeats. seen.add(x), seen.remove(x), x in seen, a.union(b)
 
 attempt
     risky()

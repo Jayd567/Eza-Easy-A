@@ -25,3 +25,11 @@ test "dictionaries"
     change d.hp by 5
     expect d.hp == 15
     expect d.has("hp")
+
+test "sets keep one of each"
+    seen = set([1, 2, 2])
+    seen.add(3)
+    seen.add(1)
+    expect seen.length == 3
+    expect 2 in seen
+    expect seen == set([3, 2, 1])
