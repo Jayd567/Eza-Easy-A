@@ -40,5 +40,5 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: ${{ inputs.artifact-name }}
-          path: ${{ github.workspace }}/${{ inputs.working-directory }}/eza-lang-0.1.0.vsix
+          path: /home/runner/work/Eza-Easy-A-Set/Eza-Easy-A-Set/vscode-eza/eza-lang-0.1.0.vsix
           archive: false
