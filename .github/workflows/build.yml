@@ -30,9 +30,8 @@ jobs:
     - name: Fetch VSCode Extension
       uses: actions/download-artifact@v7
       with:
-        name: VSCode Extension
+        name: eza-lang-0.1.0.vsix
         path: .
-        
     - name: Package into folder + zip
       shell: pwsh
       run: |
