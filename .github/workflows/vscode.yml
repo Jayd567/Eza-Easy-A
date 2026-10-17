@@ -1,0 +1,40 @@
+name: Build VSCode Extension
+
+on:
+  workflow_call: 
+    inputs:
+      working-directory:
+        description: 'Path to extension'
+        required: false
+        type: string
+        default: '.'
+
+jobs:
+  build:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working_directory }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          
+      - name: Install Dependencies
+        run: npm i --prefix -C ${{ inputs.working_directory }}
+
+      - name: Build / Package Check
+        run: | 
+              cp "$GITHUB_WORKSPACE/LICENSE" ./
+              npx @vscode/vsce package --allow-missing-repository
+
+      - name: Upload File as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: eza-lang-0.1.0.vsix
