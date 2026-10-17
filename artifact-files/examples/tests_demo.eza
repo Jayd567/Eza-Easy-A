@@ -1,0 +1,27 @@
+# Run the tests with:  eza test examples/tests_demo.eza   (or `eza test` for every file in a folder)
+# A normal `eza tests_demo.eza` skips the test blocks.
+
+define double x
+    return x * 2
+
+define clamp_health hp
+    return hp.clamp(0, 100)
+
+test "double works"
+    expect double(4) == 8
+    expect double(-1) == -2
+
+test "health stays between 0 and 100"
+    expect clamp_health(150) == 100
+    expect clamp_health(-5) == 0
+
+test "stacks give the newest item first"
+    s = stack([1, 2, 3])
+    expect pop s == 3
+    expect s.length == 2
+
+test "dictionaries"
+    d = {hp: 10}
+    change d.hp by 5
+    expect d.hp == 15
+    expect d.has("hp")

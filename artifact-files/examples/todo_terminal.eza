@@ -1,0 +1,29 @@
+# A to-do list that runs in the terminal.  Run with:  eza examples/todo_terminal.eza
+# Tab / arrows move, Enter or Space uses things, the mouse works too, Ctrl+C quits.
+# It's an ordinary `gui` block: terminal=true draws it in the terminal instead of a window.
+
+todos = ["Water the plants", "Finish the Eza guide"]
+new_todo = ""
+done_count = 0
+mood = "Focused"
+
+define add_todo
+    if new_todo != ""
+        todos.add(new_todo)
+        change new_todo to ""
+
+define finish_first
+    if len(todos) > 0
+        todos.remove(todos[0])
+        change done_count by 1
+
+gui window "todo" terminal=true centered=true gap=8 title="To-do"
+    text "{len(todos)} to do, {done_count} done" bold=true
+    text "Next: {todos.first or 'nothing - well done!'}"
+    textbox "Something to do..." name="new_todo" width=320 then add_todo()
+    button "Add" then add_todo()
+    button "Done with the next one" then finish_first()
+    dropdown name="mood" options="Focused","Relaxed","Busy"
+    checkbox "Show tips" name="tips"
+    text "Mood: {mood}"
+    button "Quit" then quit

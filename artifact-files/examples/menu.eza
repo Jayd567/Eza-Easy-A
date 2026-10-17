@@ -1,0 +1,28 @@
+# A main menu with every kind of GUI input.  Run with:  eza examples/menu.eza
+# Press Start to `go to` arena.eza. The music keeps playing across the switch.
+
+play "assets/sounds/music.wav" loop=true volume=0.5
+
+# inputs with name="x" keep their value in the variable x
+volume = sound.volume                 # the slider starts at the current volume
+sparks_on = global.get("sparks", true)
+
+gui window "menu" width=360 centered=true background=#14161C rounded=12 padding=20 gap=10
+    text "SETTINGS" font_size=16 color=#8AB4FF
+    textbox "Type your name..." name="player_name" width=320
+    text "Volume"
+    slider name="volume" min=0 max=1 width=320 then change sound.volume to volume
+    checkbox "Show sparks" name="sparks_on"
+    text "Difficulty"
+    dropdown name="difficulty" options="Easy","Normal","Hard" value="Normal"
+    button "Start" width=320 then start_game()
+
+define start_game
+    play "assets/sounds/click.wav"
+    if player_name == ""
+        change player_name to "Player"
+    # `global` is the one dictionary that survives `go to`
+    change global["player"] to player_name
+    change global["sparks"] to sparks_on
+    change global["difficulty"] to difficulty
+    go to "arena"

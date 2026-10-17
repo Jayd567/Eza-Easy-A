@@ -1,0 +1,51 @@
+# A small website with a high-score table and a form.  Run with:  eza examples/website.eza
+# then open http://localhost:8000 in your browser. Ctrl+C stops it.
+
+scores = [{name: "Ada", points: 30}, {name: "Bo", points: 25}]
+
+define score_rows
+    rows = ""
+    each s in scores.sort_by(s -> -s.points)
+        change rows by "<tr><td>{s.name}</td><td>{s.points}</td></tr>"
+    return rows
+
+serve port=8000 folder="public"
+    # the main page: HTML, with the scores filled in
+    page "/"
+        return """
+            <!doctype html>
+            <html>
+            <head>
+              <title>Eza scores</title>
+              <link rel="stylesheet" href="/style.css">
+            </head>
+            <body>
+              <h1>High scores</h1>
+              <table>{score_rows()}</table>
+              <form method="POST" action="/add">
+                <input name="name" placeholder="Your name" required>
+                <input name="points" type="number" placeholder="Points" required>
+                <button>Add</button>
+              </form>
+              <p><a href="/api/scores">The same scores as JSON</a></p>
+            </body>
+            </html>
+            """
+
+    # the form sends its fields here; then the browser goes back to the main page
+    page "/add" method="POST"
+        name = request.form.get("name", "?")
+        points = num(request.form.get("points", "0"))
+        scores.add({name: name, points: points})
+        change response.status to 303
+        change response.headers to {Location: "/"}
+
+    # for other programs: lists and dictionaries go out as JSON
+    page "/api/scores" then return scores
+
+    page "/api/scores/{name}"
+        found = scores.find(s -> s.name == name)
+        if found == none
+            change response.status to 404
+            return {error: "no score for {name}"}
+        return found

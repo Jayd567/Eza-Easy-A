@@ -1,0 +1,81 @@
+# Collisions, edge-triggered `on`, persist-while, mimic budget, GUI hover events
+scene name="test"
+    player position=0,1,0
+    cube name="wall" position=5,1,0 width=1 height=2
+    plane name="mud_puddle" position=10,0,0 width=4 height=4
+    plane name="dry_ground" position=20,0,0 width=10 height=10
+
+print("touching wall?", player.collides_with(wall))
+change player.position.x to 4.5
+print("touching wall now?", player.collides_with(wall), " any of them?", player.collides_with([mud_puddle, dry_ground, wall]))
+
+# the mud example from the spec: fires once on entering, undoes itself on dry ground
+change player.position.x to 0
+on player.collides_with(mud_puddle)
+    print("splash!")
+    persist
+        change player.speed by -5
+    until player.collides_with(dry_ground) or 120 steps
+
+change player.position.x to 10
+tick
+print("in mud, speed:", player.speed)
+tick 3
+print("still in mud (no re-trigger), speed:", player.speed)
+change player.position.x to 18
+tick
+print("on dry ground, speed:", player.speed)
+
+# persist with no ending inside `on`: lasts while the condition holds
+glowing = false
+on glowing
+    persist
+        change player.color to #FFFF00
+tick
+change glowing to true
+tick
+print("glowing:", player.color)
+change glowing to false
+tick
+attempt
+    print(player.color)
+handle error
+    print("not glowing: color property removed again")
+
+# mimic budget: 3 enemies x 60 steps, budget 100 -> they finish over several frames
+param mimic_budget = 100
+data Bot
+    position = [0, 0, 0]
+    speed = 1
+
+a = Bot()
+b = Bot()
+c = Bot()
+mimic sa to a
+    each step in 60
+        change sa.position.x by sa.speed
+mimic sb to b
+    each step in 60
+        change sb.position.x by sb.speed
+mimic sc to c
+    each step in 60
+        change sc.position.x by sc.speed
+print("frame 0 ready:", sa.ready, sb.ready, sc.ready)
+tick
+print("frame 1 ready:", sa.ready, sb.ready, sc.ready, " sc.x =", sc.position.x)
+tick
+print("frame 2 ready:", sa.ready, sb.ready, sc.ready, " (shadows cleared after their one frame)")
+
+# GUI hover events (the engine sets .hover from the mouse; here we fake it)
+gui window "menu" width=300 height=200
+    button "Play" color=#222222 then print("play!")
+        on button.hover persist change button.color to #444444
+
+btn = menu.children[0]
+print("button color:", menu.children[0].color)
+change menu.children[0].hover to true
+tick
+print("hovered color:", menu.children[0].color)
+change menu.children[0].hover to false
+tick
+print("unhovered color:", menu.children[0].color)

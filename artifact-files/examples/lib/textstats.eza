@@ -1,0 +1,17 @@
+# A module (see toolbox.eza): other files reach its names as stats.summary(...).
+# Names starting with _ are private - only this file can use them.
+_biggest_name = ""
+_biggest_count = 0
+
+define word_count, text
+    return len(text.words)
+
+define summary, name, text
+    words = word_count(text)
+    if words > _biggest_count
+        change _biggest_count to words
+        change _biggest_name to name
+    return "{name}: {words} words, {len(text.lines)} lines"
+
+define biggest
+    return "{_biggest_name} ({_biggest_count} words)"
