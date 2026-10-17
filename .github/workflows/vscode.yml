@@ -8,6 +8,9 @@ on:
         required: false
         type: string
         default: '.'
+      artifact-name:
+        description: "The name of the artifact"
+        type: string
 
 jobs:
   build:
