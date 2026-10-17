@@ -1,4 +1,4 @@
-name: Build
+name: Build + Upload Artifact
 
 on:
   push:
@@ -16,6 +16,8 @@ jobs:
     runs-on: windows-latest
 
     steps:
+    - name: Rust Cache
+      uses: Swatinem/rust-cache@v2.9.2
     - uses: actions/checkout@v4
     - name: Build Binary
       run: cargo build --release --verbose
@@ -30,4 +32,5 @@ jobs:
       with:
         name: eza-windows
         path: eza-windows.zip  
+        archive: false
         if-no-files-found: error      
