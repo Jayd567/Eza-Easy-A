@@ -97,4 +97,4 @@ Eza is written in Rust and uses [Bevy](https://bevyengine.org) for windows, grap
 
 ## License
 
-[AGPL](LICENSE)
+[AGPL](LICENSE.txt)
