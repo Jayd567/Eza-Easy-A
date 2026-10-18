@@ -31,7 +31,7 @@ jobs:
       uses: actions/download-artifact@v7
       with:
         name: eza-lang-0.1.0.vsix
-        path: ./
+        path: ./artifact-files/
         merge-multiple: true
     - name: Package into folder + zip
       shell: pwsh
@@ -39,7 +39,6 @@ jobs:
           New-Item -ItemType Directory -Force -Path "Eza"
           Copy-Item "target/release/eza.exe" -Destination "Eza/" -Force
           Copy-Item "artifact-files\*" -Destination "Eza/" -Recurse -Force
-          Copy-Item "./eza-lang-0.1.0.vsix" -Destination "Eza/" -Force
           Compress-Archive -Path "Eza" -DestinationPath "eza-windows.zip"
     - name: Upload Executable Artifact
       uses: actions/upload-artifact@v7
