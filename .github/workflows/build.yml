@@ -32,7 +32,7 @@ jobs:
       run: npm ci
     - name: Package vscode extension
       run: | 
-        Copy-Item "$GITHUB_WORKSPACE/LICENSE.txt" -Destination ./vscode-eza -Force
+        Copy-Item "./LICENSE.txt" -Destination ./vscode-eza -Force
         cd ./vscode-eza
         npx @vscode/vsce package --allow-missing-repository
     - name: Package into folder + zip
