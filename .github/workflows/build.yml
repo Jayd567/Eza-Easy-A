@@ -25,6 +25,8 @@ jobs:
       with:
         node-version: 22
         cache: npm
+        cache-dependency-path: ./vscode-eza/package-lock.json
+
     - name: Install Dependencies
       working-directory: ./vscode-eza
       run: npm ci
