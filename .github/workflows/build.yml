@@ -39,6 +39,9 @@ jobs:
           New-Item -ItemType Directory -Force -Path "Eza"
           Copy-Item "target/release/eza.exe" -Destination "Eza/" -Force
           Copy-Item "artifact-files\*" -Destination "Eza/" -Recurse -Force
+          Compress-Archive -Path "Eza/extension.vsixmanifest", "Eza/[Content_Types].xml", "Eza/extension" -DestinationPath "Eza/eza-lang-0.1.0.zip"
+          Rename-Item -Path "Eza/eza-lang-0.1.0.zip" -NewName "eza-lang-0.1.0.vsix"
+          Remove-Item "Eza/extension.vsixmanifest", "Eza/[Content_Types].xml", "Eza/extension", "Eza/eza-lang-0.1.0.zip"
           Compress-Archive -Path "Eza" -DestinationPath "eza-windows.zip"
     - name: Upload Executable Artifact
       uses: actions/upload-artifact@v7
