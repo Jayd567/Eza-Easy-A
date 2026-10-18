@@ -12,36 +12,33 @@ env:
 
 jobs:
 
-  run-reusable:
-    uses: ./.github/workflows/vscode.yml
-    with:
-      artifact-name: 'VSCode Extension'
-      working-directory: './vscode-eza'
-      
   build:
     runs-on: windows-latest
-    needs: run-reusable
     steps:
     - uses: actions/checkout@v7
     - name: Rust Cache
       uses: Swatinem/rust-cache@v2.9.2
     - name: Build Binary
       run: cargo build --release --verbose
-    - name: Fetch VSCode Extension
-      uses: actions/download-artifact@v7
+    - name: Setup Node.js
+      uses: actions/setup-node@v7
       with:
-        name: eza-lang-0.1.0.vsix
-        path: ./artifact-files/
-        merge-multiple: true
+        node-version: 22
+        cache: npm
+    - name: Install Dependencies
+      run: npm ci
+    - name: Package vscode extension
+      run: | 
+        Copy-Item "$GITHUB_WORKSPACE/LICENSE" -Destination ./vscode-eza -Force
+        cd ./vscode-eza
+        npx @vscode/vsce package --allow-missing-repository
     - name: Package into folder + zip
       shell: pwsh
       run: |
           New-Item -ItemType Directory -Force -Path "Eza"
           Copy-Item "target/release/eza.exe" -Destination "Eza/" -Force
           Copy-Item "artifact-files\*" -Destination "Eza/" -Recurse -Force
-          Compress-Archive -Path "Eza/extension.vsixmanifest", "Eza/[Content_Types].xml", "Eza/extension" -DestinationPath "Eza/eza-lang-0.1.0.zip"
-          Rename-Item -Path "Eza/eza-lang-0.1.0.zip" -NewName "eza-lang-0.1.0.vsix"
-          Remove-Item -LiteralPath "Eza/extension.vsixmanifest", "Eza/[Content_Types].xml", "Eza/extension", "Eza/eza-lang-0.1.0.zip"
+          Copy-Item "./vscode-eza/eza-lang-0.1.0.vsix" -Destination "Eza/" -Force
           Compress-Archive -Path "Eza" -DestinationPath "eza-windows.zip"
     - name: Upload Executable Artifact
       uses: actions/upload-artifact@v7
