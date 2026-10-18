@@ -31,7 +31,8 @@ jobs:
       uses: actions/download-artifact@v7
       with:
         name: eza-lang-0.1.0.vsix
-        path: ./eza-lang-0.1.0.vsix
+        path: ./
+        merge-multiple: true
     - name: Package into folder + zip
       shell: pwsh
       run: |
