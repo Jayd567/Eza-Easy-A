@@ -13,6 +13,9 @@
     "Snippets"
   ],
   "main": "./extension.js",
+  "activationEvents": [
+    "onLanguage:eza"
+  ],
   "contributes": {
     "languages": [
       {
@@ -70,5 +73,13 @@
         }
       }
     }
+  },
+  "dependencies": {
+    "@vscode/vsce": "^4.0.0",
+    "vsce": "^2.15.0"
+  },
+  "allowScripts": {
+    "@vscode/vsce-sign@2.1.0": true,
+    "keytar@7.9.0": true
   }
 }
