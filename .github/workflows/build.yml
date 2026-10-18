@@ -26,6 +26,7 @@ jobs:
         node-version: 22
         cache: npm
     - name: Install Dependencies
+      working-directory: ./vscode-eza
       run: npm ci
     - name: Package vscode extension
       run: | 
