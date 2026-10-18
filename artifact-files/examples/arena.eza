@@ -1,0 +1,54 @@
+# Particles and sounds.  Start from menu.eza, or run directly:  eza examples/arena.eza
+# WASD / arrows move   SPACE makes an explosion   ESC goes back to the menu
+
+player = global.get("player", "Player")
+speed = 260
+if global.get("difficulty", "Normal") == "Hard"
+    change speed to 380
+
+play "assets/sounds/music.wav" loop=true volume=0.5     # already playing? then it just carries on
+
+stage gravity=0
+    # snow drifting down across the whole screen
+    particles name="snow" position=0,380 area=1300,0 rate=30 life=8 speed=70 direction=270 spread=25 size=3 color=#DDE6FF end_color=#DDE6FF
+    # a soft trail that follows the hero (listed first, so it's drawn underneath)
+    particles name="trail" rate=60 life=0.5 speed=30 size=10 end_size=1 color=#E1F5FE end_color=#448AFF00
+    sprite name="hero" position=0,0 width=28 height=28 color=#8AB4FF
+    sprite name="coin" position=180,90 width=14 height=14 color=#FFD54F
+    # bursts only (rate=0): `emit 40 from sparks`
+    particles name="sparks" rate=0 life=0.8 speed=260 size=6 end_size=1 color=#FFE082 end_color=#FF6D0000 gravity=-400
+    particles name="smoke" rate=0 life=1.4 speed=60 size=10 end_size=40 color=#9E9E9E end_color=#42424200 gravity=40
+
+gui window "hud" x=16 y=16 background=#00000088 rounded=8
+    text "{player}  -  coins: 0" name="score_text"
+
+coins = 0
+
+on scene.ticks
+    move = [0, 0]
+    if keyboard.held("a") or keyboard.held("left")
+        change move by [-1, 0]
+    if keyboard.held("d") or keyboard.held("right")
+        change move by [1, 0]
+    if keyboard.held("w") or keyboard.held("up")
+        change move by [0, 1]
+    if keyboard.held("s") or keyboard.held("down")
+        change move by [0, -1]
+    change hero.position by move * (speed / 60)
+    change trail.position to hero.position
+
+on hero.collides_with(coin)
+    change coins by 1
+    play "assets/sounds/coin.wav"
+    if global.get("sparks", true)
+        emit 30 from sparks at coin.position
+    change coin.position to [random_int(-400, 400), random_int(-250, 250)]
+    change hud.children[0].label to "{player}  -  coins: {coins}"
+
+on keyboard.pressed("space")
+    play "assets/sounds/boom.wav" volume=0.8
+    emit 60 from sparks at hero.position
+    emit 25 from smoke at hero.position
+
+on keyboard.pressed("escape")
+    go to "menu"

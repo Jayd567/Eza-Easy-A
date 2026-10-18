@@ -1,0 +1,5 @@
+# This file is SUPPOSED to fail: mimic blocks may only change their shadow.
+score = 0
+enemy = [1, 2, 3]
+mimic shadow to enemy
+    change score by 10

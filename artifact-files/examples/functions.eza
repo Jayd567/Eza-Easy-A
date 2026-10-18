@@ -1,0 +1,43 @@
+# Functions, multi-value returns, inline functions, data, attempt
+define calculate_damage, base_power, multiplier
+    total = base_power * multiplier
+    return total
+
+final_damage = calculate_damage(50, 1.5)
+print("damage:", final_damage)
+
+data Item
+    name = ""
+    id = 0
+    weight = 0.0
+    is_equippable = false
+
+sword = Item(name="Sword", id=1, weight=3.5, is_equippable=true)
+print(sword)
+print(sword.name, "weighs", sword.weight)
+
+data Enemy
+    position = [0, 0, 0]
+    speed = 1
+
+enemy = Enemy()
+
+define spawn_coordinates
+    return 100, 0, 450
+
+change enemy.position to spawn_coordinates()
+print("enemy at", enemy.position, "x =", enemy.position.x)
+
+vortex_effect = define entity
+    change entity.position.x by 2
+    change entity.position.z by 2
+
+vortex_effect(enemy)
+print("after vortex:", enemy.position)
+
+attempt
+    network.connect("game-server.com")
+handle error
+    print("Could not connect! Switching to offline mode.")
+    change global.online_mode to false
+print("online:", global.online_mode)

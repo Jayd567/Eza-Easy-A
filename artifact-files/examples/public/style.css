@@ -1,0 +1,7 @@
+body { font-family: system-ui, sans-serif; max-width: 520px; margin: 3em auto; color: #1d1d22; }
+h1 { color: #5865f2; }
+table { border-collapse: collapse; width: 100%; margin-bottom: 1.5em; }
+td { padding: 0.5em; border-bottom: 1px solid #ddd; }
+td:last-child { text-align: right; font-weight: bold; }
+input, button { font: inherit; padding: 0.4em 0.6em; }
+button { background: #5865f2; color: white; border: none; border-radius: 6px; cursor: pointer; }

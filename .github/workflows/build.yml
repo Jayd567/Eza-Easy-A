@@ -1,0 +1,52 @@
+name: Build + Upload Artifact
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+
+  build:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v7
+    - name: Rust Cache
+      uses: Swatinem/rust-cache@v2.9.2
+    - name: Build Binary
+      run: cargo build --release --verbose
+    - name: Setup Node.js
+      uses: actions/setup-node@v7
+      with:
+        node-version: 22
+        cache: npm
+        cache-dependency-path: ./vscode-eza/package-lock.json
+
+    - name: Install Dependencies
+      working-directory: ./vscode-eza
+      run: npm ci
+    - name: Package vscode extension
+      run: | 
+        Copy-Item "./LICENSE.txt" -Destination ./vscode-eza -Force
+        cd ./vscode-eza
+        npx @vscode/vsce package --allow-missing-repository
+    - name: Package into folder + zip
+      shell: pwsh
+      run: |
+          New-Item -ItemType Directory -Force -Path "Eza"
+          Copy-Item "target/release/eza.exe" -Destination "Eza/" -Force
+          Copy-Item "artifact-files\*" -Destination "Eza/" -Recurse -Force
+          Copy-Item "./vscode-eza/eza-lang-0.1.0.vsix" -Destination "Eza/" -Force
+          Compress-Archive -Path "Eza" -DestinationPath "eza-windows.zip"
+    - name: Upload Executable Artifact
+      uses: actions/upload-artifact@v7
+      with:
+        name: eza-windows
+        path: eza-windows.zip  
+        archive: false
+        if-no-files-found: error      

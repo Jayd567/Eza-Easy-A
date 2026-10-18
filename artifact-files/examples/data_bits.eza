@@ -1,0 +1,71 @@
+# Bitwise, stacks/queues, dictionaries, files/JSON and images
+
+# --- bitwise: literals, operators and the matching methods
+flags = 0b0000_1101
+mask = 0b0000_0100
+print("flags:", flags, " hex 0xFF:", 0xFF, " binary:", flags.to_binary, " hex:", (255).to_hex)
+if flags & mask != 0
+    print("bit 2 is on (operator)")
+if flags.bit_and(mask) != 0
+    print("bit 2 is on (method)")
+print("| ^ << >> ~ :", flags | 0b10, flags ^ 0b1, 1 << 4, 256 >> 2, ~0)
+print("bit 3 set?", flags.bit(3), " bit 1 set?", flags.bit(1))
+
+# --- stacks and queues
+s = stack()
+push 5 to s
+push 10 to s
+print("stack:", s, " peek:", s.peek, " length:", s.length)
+val2 = pop s
+val1 = pop s
+push val1 + val2 to s
+print("after adding the top two:", s)
+
+q = queue(["first", "second"])
+push "third" to q
+print("queue pops the oldest:", pop q, "then", pop q, " left:", q)
+
+nums = [1, 2, 3]
+push 4 to nums
+print("plain lists work like stacks:", pop nums, nums)
+
+# --- dictionaries
+settings = {theme: "dark", volume: 7, tags: ["a", "b"]}
+change settings.volume by 1
+change settings["lang"] to "en"
+print(settings)
+print("keys:", settings.keys, " has lang?", settings.has("lang"), " missing with default:", settings.get("size", 12))
+each key in settings then
+    print("  ", key, "=", settings[key])
+
+# --- files and JSON (paths are relative to this script)
+save settings to "output/settings.json"
+back = load "output/settings.json"
+print("JSON round trip matches:", back == settings)
+save "hello file" to "output/note.txt"
+append "line one" to "output/log.txt"
+print("text file:", load "output/note.txt", " exists:", exists("output/note.txt"), exists("nope.txt"))
+attempt
+    missing = load "output/missing.json"
+handle error
+    print("caught:", error)
+
+# --- images
+pic = load "assets/pixels.png"
+print(pic, pic.width, pic.height)
+current_color = pic.pixel(0, 0)
+if current_color == #FF0000
+    print("Found a red codel!")
+print("pixels:", pic.pixel(1, 0), pic.pixel(2, 0), pic.pixel(3, 0), " transparent:", pic.pixel(0, 1).a)
+save pic to "output/copy.png"
+print("saved copy is the same size:", (load "output/copy.png").size)
+
+# --- 2D vector helpers
+print("angle of [0, 1]:", [0, 1].angle, " [1, 0] rotated 90:", [1, 0].rotate(90))
+
+# --- did-you-mean on typos
+volume = 3
+attempt
+    print(volumee)
+handle error
+    print(error)
