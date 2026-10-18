@@ -6,36 +6,19 @@ on:
   pull_request:
     branches: [ "main" ]
   workflow_dispatch:
-  schedule:
-    # Nightly release, 03:17 UTC
-    - cron: "17 3 * * *"
+
+# A newer push to the same branch cancels the older build, so two nightly
+# publishes never race each other
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
 
-  # Skip the nightly build when main hasn't moved since the last one
-  check:
-    runs-on: ubuntu-latest
-    outputs:
-      changed: ${{ steps.check.outputs.changed }}
-    steps:
-    - id: check
-      env:
-        GH_TOKEN: ${{ github.token }}
-        GH_REPO: ${{ github.repository }}
-      run: |
-        last=$(gh api "repos/$GH_REPO/commits/nightly" --jq .sha 2>/dev/null || true)
-        if [ "${{ github.event_name }}" = "schedule" ] && [ "$last" = "$GITHUB_SHA" ]; then
-          echo "changed=false" >> "$GITHUB_OUTPUT"
-        else
-          echo "changed=true" >> "$GITHUB_OUTPUT"
-        fi
-
   build:
-    needs: check
-    if: needs.check.outputs.changed == 'true'
     runs-on: windows-latest
     permissions:
       contents: write
@@ -76,7 +59,7 @@ jobs:
         archive: false
         if-no-files-found: error
     - name: Publish nightly release
-      if: (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+      if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
       shell: pwsh
       env:
         GH_TOKEN: ${{ github.token }}
@@ -92,5 +75,5 @@ jobs:
         gh release create nightly "nightly/Eza-Windows.zip" `
           --prerelease `
           --target "${{ github.sha }}" `
-          --title "Nightly ($date)" `
-          --notes "Built automatically from main at $sha on $date. Nightly builds have the newest features but may be unstable; for a stable version use the latest release."
+          --title "Nightly ($date, $sha)" `
+          --notes "Built automatically from the latest commit on main ($sha, $date). Nightly builds have the newest features but may be unstable; for a stable version use the latest release."

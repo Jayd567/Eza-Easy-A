@@ -16,7 +16,7 @@
 
 That's it: nothing to compile, no other software needed. Works on 64-bit Windows 10 and 11. If you use VS Code, the installer also adds Eza support (colors, hints and error squiggles).
 
-All versions are on the [Releases page](https://github.com/Jayd567/Eza-Easy-A/releases). Want the newest features before they're released? Try the [**nightly build**](https://github.com/Jayd567/Eza-Easy-A/releases/download/nightly/Eza-Windows.zip), rebuilt every night from the latest code (it may have bugs).
+All versions are on the [Releases page](https://github.com/Jayd567/Eza-Easy-A/releases). Want the newest features before they're released? Try the [**nightly build**](https://github.com/Jayd567/Eza-Easy-A/releases/download/nightly/Eza-Windows.zip), rebuilt automatically every time the code changes (it may have bugs).
 
 ## A taste
 
