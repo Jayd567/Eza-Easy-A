@@ -38,7 +38,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path "Eza"
           Copy-Item "target/release/eza.exe" -Destination "Eza/" -Force
           Copy-Item "artifact-files\*" -Destination "Eza/" -Recurse -Force
-          Copy-Item "$env:GITHUB_WORKSPACE\eza-lang-0.1.0.vsix\eza-lang-0.1.0.vsix" -Destination "Eza/" -Force
+          Copy-Item "$env:GITHUB_WORKSPACE\eza-lang-0.1.0.vsix" -Destination "Eza/" -Force
           Compress-Archive -Path "Eza" -DestinationPath "eza-windows.zip"
     - name: Upload Executable Artifact
       uses: actions/upload-artifact@v7
